@@ -39,10 +39,11 @@ Details zum Backup-Mechanismus und den Browser-Grenzen dabei: [`docs/backup.md`]
 ## Dokumentation
 
 - [`docs/concept.md`](docs/concept.md) — Problem, Abgrenzung, Verknüpfungskonzept
+- [`docs/architecture.md`](docs/architecture.md) — technische Tiefe: Skript-/DOM-Aufbau, vollständige `window.LWT`-Schnittstelle, "wo ändere ich was"-Leitfaden
 - [`docs/data-model.md`](docs/data-model.md) — Schema, Speicher-Keys, Migration
 - [`docs/backup.md`](docs/backup.md) — Backup-Mechanik und Browser-Grenzen
 - [`docs/testing.md`](docs/testing.md) — Testharness und wie man einen Test schreibt
-- [`CLAUDE.md`](CLAUDE.md) — technischer Bauplan (Skript-Architektur, `window.LWT`-Schnittstelle, Hard Constraints)
+- [`CLAUDE.md`](CLAUDE.md) — Projekt-Scope und Hard Constraints, verweist für Details auf `docs/architecture.md`
 
 ## Tests
 

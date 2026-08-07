@@ -28,6 +28,8 @@ The two areas are linked: a time entry may carry an optional `taskId` back to a 
 3. **TaskModule** — the former LocalTasks script, close to verbatim. Defines `window.LWT.tasks`. Loads after TimeModule so it can safely read `window.LWT.time` while rendering (tracked-minutes pill, ticket-to-task resolution).
 4. **AppShell** — new glue code only: main-tab switching (Zeit/Aufgaben), the unified theme toggle, and the combined "Daten" menu (backup/export/import/clear across both datasets).
 
+**Read [`docs/architecture.md`](docs/architecture.md) before making a structural change** (new cross-module feature, renamed/removed DOM id, anything touching the sticky bar, tab switching, theming, or the Daten menu). It has the full DOM tree, the renamed-id table, the complete `window.LWT` surface with what each method does and who calls it, and a "where do I make this change" decision guide — everything below in this section is the short version.
+
 Each module keeps its own internal state, storage keys, and rendering — they do **not** share DOM ids beyond a handful of deliberately centralized elements (`#themeToggleBtn`, `#dataMenu` and its contents, `#toastRoot`, the sticky `#currentTimer`/`#pomodoroBar` pair). Task- and time-specific ids that existed in both source apps were prefixed (`task-tabbar`, `task-viewRoot`, `taskConfirmDialog`, `taskPromptDialog`, `timeEditDialog`, `timeConfirmDialog`) to avoid collisions.
 
 **`window.LWT` surface:**
