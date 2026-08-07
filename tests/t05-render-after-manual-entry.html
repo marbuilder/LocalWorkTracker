@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T00 — Render nach manuellem Eintrag</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 320px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 700px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T00 — Render nach manuellem Eintrag</h1>
+  <p>Lädt <code>../index.html</code> in einem Iframe, legt einen manuellen Eintrag an und prüft, dass Diagramm, Summary und Einträge-Tabelle danach Daten zeigen. Globale Exceptions werden mitgeloggt.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 38%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <h2>State-Snapshot nach Test</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEYS = [
+        'local-work-tracker-v1-time-entries',
+        'local-work-tracker-v1-time-entries-ticket-suggestions',
+        'local-work-tracker-v1-time-entries-theme',
+        'local-work-tracker-v1-time-entries-ui-state'
+      ];
+
+      let results = [];
+      let caughtErrors = [];
+
+      function record(name, pass, details) {
+        results.push({ name, pass: !!pass, details: String(details == null ? '' : details) });
+      }
+
+      function renderResults() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+          tr.innerHTML = '<td>' + r.name + '</td><td class="' + (r.pass ? 'pass' : 'fail') + '">' + (r.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + safe + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const allPass = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        document.getElementById('status').innerHTML = noResults
+          ? 'Running…'
+          : (allPass
+              ? '<span class="pass">Alle Checks bestanden.</span>'
+              : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        document.getElementById('errors').textContent = caughtErrors.length
+          ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n')
+          : '(keine)';
+      }
+
+      function waitRaf(n = 2) {
+        return new Promise(resolve => {
+          let i = 0;
+          const tick = () => (++i >= n ? resolve() : requestAnimationFrame(tick));
+          requestAnimationFrame(tick);
+        });
+      }
+
+      function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+      function clearLocalStorageKeys() {
+        // Same-origin -> shared localStorage. Remove app keys and rotating snapshots.
+        const toRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k) continue;
+          if (STORAGE_KEYS.includes(k) || k.startsWith('local-work-tracker-v1-time-entries-snapshot-')) {
+            toRemove.push(k);
+          }
+        }
+        toRemove.forEach(k => localStorage.removeItem(k));
+      }
+
+      function localToday() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      }
+
+      function dispatchInput(el, value) {
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      async function loadApp(iframe) {
+        return new Promise((resolve, reject) => {
+          const onload = () => {
+            iframe.removeEventListener('load', onload);
+            resolve();
+          };
+          iframe.addEventListener('load', onload);
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => reject(new Error('iframe load timeout')), 5000);
+        });
+      }
+
+      function hookErrors(win) {
+        win.addEventListener('error', (event) => {
+          caughtErrors.push({
+            message: 'window.error: ' + (event.message || ''),
+            stack: event.error && event.error.stack ? event.error.stack : (event.filename + ':' + event.lineno + ':' + event.colno)
+          });
+        });
+        win.addEventListener('unhandledrejection', (event) => {
+          const r = event.reason;
+          caughtErrors.push({
+            message: 'unhandledrejection: ' + (r && r.message ? r.message : String(r)),
+            stack: r && r.stack ? r.stack : ''
+          });
+        });
+      }
+
+      async function run() {
+        results = [];
+        caughtErrors = [];
+        renderResults();
+
+        clearLocalStorageKeys();
+
+        const iframe = document.getElementById('app');
+        try {
+          await loadApp(iframe);
+        } catch (err) {
+          record('iframe laedt', false, err.message);
+          renderResults();
+          return;
+        }
+
+        const win = iframe.contentWindow;
+        const doc = iframe.contentDocument;
+        if (!win || !doc) {
+          record('Iframe-Kontext erreichbar', false, 'contentWindow/contentDocument null');
+          renderResults();
+          return;
+        }
+        hookErrors(win);
+        await waitRaf(3);
+
+        // Sanity: no errors during initial render
+        record('Initial-Render ohne Exception', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+
+        // Locate inputs
+        const manualTicket = doc.getElementById('manualTicket');
+        const manualDate = doc.getElementById('manualDate');
+        const manualStart = doc.getElementById('manualStart');
+        const manualEnd = doc.getElementById('manualEnd');
+        const addBtn = doc.getElementById('addManualBtn');
+        const entriesContainer = doc.getElementById('entriesContainer');
+        const summaryContainer = doc.getElementById('summaryContainer');
+        const chartSubtitle = doc.getElementById('chartSubtitle');
+
+        record('manuelles Eingabe-Formular vorhanden', manualTicket && manualDate && manualStart && manualEnd && addBtn, JSON.stringify({
+          manualTicket: !!manualTicket, manualDate: !!manualDate, manualStart: !!manualStart, manualEnd: !!manualEnd, addBtn: !!addBtn
+        }));
+
+        if (!manualTicket || !addBtn) {
+          renderResults();
+          return;
+        }
+
+        // Pre-state: should show empty
+        record('Initial: Einträge-Container zeigt empty', entriesContainer && entriesContainer.querySelector('.empty'), entriesContainer ? entriesContainer.innerHTML.slice(0, 200) : 'no container');
+
+        // Fill and submit a manual entry: today 09:00 -> 10:00, ticket "T-TEST"
+        dispatchInput(manualTicket, 'T-TEST');
+        const today = localToday();
+        if (manualDate.value !== today) dispatchInput(manualDate, today);
+        dispatchInput(manualStart, '09:00');
+        dispatchInput(manualEnd, '10:00');
+
+        addBtn.click();
+        await waitRaf(3);
+
+        // Errors after submit?
+        record('Submit ohne Exception', caughtErrors.length === 0, caughtErrors.map(e => e.message + '\n' + e.stack).join('\n---\n') || 'keine');
+
+        // localStorage updated?
+        const raw = win.localStorage.getItem('local-work-tracker-v1-time-entries');
+        let parsed = null;
+        try { parsed = raw ? JSON.parse(raw) : null; } catch {}
+        record('localStorage enthält 1 Eintrag', parsed && Array.isArray(parsed.entries) && parsed.entries.length === 1, raw ? raw.slice(0, 300) : 'null');
+
+        // Entries table shows a data row
+        const entriesTable = entriesContainer && entriesContainer.querySelector('table');
+        const entriesRow = entriesContainer && entriesContainer.querySelector('table tbody tr');
+        record('Einträge-Tabelle hat Datenzeile', !!entriesRow, entriesContainer ? entriesContainer.innerHTML.slice(0, 400) : 'no container');
+
+        // Summary should have a data row (not the .empty placeholder)
+        const summaryRow = summaryContainer && summaryContainer.querySelector('table tbody tr');
+        const summaryEmpty = summaryContainer && summaryContainer.querySelector('.empty');
+        record('Summary-Tabelle hat Datenzeile (kein .empty)', !!summaryRow && !summaryEmpty, summaryContainer ? summaryContainer.innerHTML.slice(0, 400) : 'no container');
+
+        // Chart subtitle should not say "Keine Daten"
+        const subtitleText = chartSubtitle ? chartSubtitle.textContent : '';
+        record('Chart-Subtitle zeigt Daten (nicht "Keine Daten")', !subtitleText.includes('Keine Daten'), subtitleText);
+
+        // Filter "Heute" chip should be active
+        const todayChip = doc.querySelector('.range-chips button[data-range="today"]');
+        record('Range-Chip "Heute" ist aktiv', todayChip && todayChip.classList.contains('active'), todayChip ? todayChip.outerHTML : 'no chip');
+
+        // Stats card "Einträge" should be "1"
+        const statsCards = doc.querySelectorAll('#stats .stat');
+        const eintraegeCard = Array.from(statsCards).find(s => s.querySelector('.label') && s.querySelector('.label').textContent === 'Einträge');
+        record('Stat-Karte "Einträge" = 1', eintraegeCard && eintraegeCard.querySelector('.value') && eintraegeCard.querySelector('.value').textContent === '1', eintraegeCard ? eintraegeCard.outerHTML : 'no card');
+
+        document.getElementById('payload').textContent = JSON.stringify({
+          today,
+          localStorage: parsed,
+          errors: caughtErrors
+        }, null, 2);
+
+        renderResults();
+      }
+
+      document.getElementById('rerunBtn').addEventListener('click', run);
+      run().catch(err => {
+        caughtErrors.push({ message: 'runner: ' + err.message, stack: err.stack });
+        renderResults();
+      });
+    })();
+  </script>
+</body>
+</html>

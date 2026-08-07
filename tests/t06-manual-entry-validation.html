@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T01 — Manueller Eintrag: Validierung</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 240px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 700px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T01 — Manueller Eintrag: Validierung</h1>
+  <p>Lädt <code>../index.html</code>, prüft, dass ungültige manuelle Eingaben Inline-Fehler statt <code>alert()</code> erzeugen.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 40%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_PREFIX = 'local-work-tracker-v1-time-entries';
+      let results = [], caughtErrors = [];
+      const $ = id => document.getElementById(id);
+      function record(name, pass, details) { results.push({ name, pass: !!pass, details: String(details ?? '') }); }
+      function renderResults() {
+        const tbody = $('results'); tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+          tr.innerHTML = '<td>'+r.name+'</td><td class="'+(r.pass?'pass':'fail')+'">'+(r.pass?'PASS':'FAIL')+'</td><td><pre>'+safe+'</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const all = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        $('status').innerHTML = noResults ? '<span>Running…</span>' : (all ? '<span class="pass">Alle Checks bestanden.</span>' : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        $('errors').textContent = caughtErrors.length ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n') : '(keine)';
+      }
+      function waitRaf(n=2) { return new Promise(r => { let i=0; const t=()=>(++i>=n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }); }
+      function dispatchInput(el, val) { el.value = val; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+      function clearKeys() {
+        const rm = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === STORAGE_PREFIX || k.startsWith(STORAGE_PREFIX + '-'))) rm.push(k);
+        }
+        rm.forEach(k => localStorage.removeItem(k));
+      }
+      function hookErrors(win) {
+        win.addEventListener('error', e => caughtErrors.push({ message: 'error: ' + e.message, stack: e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}` }));
+        win.addEventListener('unhandledrejection', e => { const r = e.reason; caughtErrors.push({ message: 'rejection: ' + (r?.message || String(r)), stack: r?.stack || '' }); });
+      }
+      function load(iframe) {
+        return new Promise((res, rej) => {
+          iframe.addEventListener('load', () => res(), { once: true });
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => rej(new Error('load timeout')), 5000);
+        });
+      }
+      function localToday() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      }
+
+      async function run() {
+        results = []; caughtErrors = []; renderResults();
+        clearKeys();
+        const iframe = $('app');
+        try { await load(iframe); } catch (e) { record('iframe laedt', false, e.message); renderResults(); return; }
+        const win = iframe.contentWindow, doc = iframe.contentDocument;
+        hookErrors(win); await waitRaf(3);
+
+        const manualTicket = doc.getElementById('manualTicket');
+        const manualDate = doc.getElementById('manualDate');
+        const manualStart = doc.getElementById('manualStart');
+        const manualEnd = doc.getElementById('manualEnd');
+        const manualPause = doc.getElementById('manualPause');
+        const addBtn = doc.getElementById('addManualBtn');
+
+        // Case 1: Empty submit -> ticket field gets aria-invalid + .field-error
+        dispatchInput(manualStart, '');
+        dispatchInput(manualEnd, '');
+        addBtn.click();
+        await waitRaf(2);
+        record(
+          'leerer Submit → manualTicket bekommt aria-invalid',
+          manualTicket.getAttribute('aria-invalid') === 'true',
+          'aria-invalid=' + manualTicket.getAttribute('aria-invalid')
+        );
+        const fieldErrAfterEmpty = manualTicket.parentElement.querySelector('.field-error');
+        record(
+          'leerer Submit → .field-error neben Ticket-Input',
+          !!fieldErrAfterEmpty && fieldErrAfterEmpty.textContent.length > 0,
+          fieldErrAfterEmpty ? fieldErrAfterEmpty.textContent : 'kein .field-error'
+        );
+
+        // Case 2: end <= start -> .field-error neben manualEnd
+        dispatchInput(manualTicket, 'T1');
+        dispatchInput(manualStart, '10:00');
+        dispatchInput(manualEnd, '09:00');
+        addBtn.click();
+        await waitRaf(2);
+        const endError = manualEnd.parentElement.querySelector('.field-error');
+        record(
+          'Ende <= Start → .field-error mit "nach Start"-Hinweis',
+          !!endError && /nach Start/i.test(endError.textContent),
+          endError ? endError.textContent : 'kein .field-error'
+        );
+
+        // Case 3: pause >= span
+        dispatchInput(manualStart, '09:00');
+        dispatchInput(manualEnd, '10:00');
+        dispatchInput(manualPause, '60');
+        addBtn.click();
+        await waitRaf(2);
+        const pauseError = manualPause.parentElement.querySelector('.field-error');
+        record(
+          'Pause >= Spanne → .field-error neben Pause-Input',
+          !!pauseError && /Pause/i.test(pauseError.textContent),
+          pauseError ? pauseError.textContent : 'kein .field-error'
+        );
+
+        // Case 4: valid -> entry added
+        dispatchInput(manualPause, '0');
+        dispatchInput(manualStart, '09:00');
+        dispatchInput(manualEnd, '10:00');
+        addBtn.click();
+        await waitRaf(3);
+        const entriesContainer = doc.getElementById('entriesContainer');
+        const entriesRow = entriesContainer.querySelector('table tbody tr');
+        record(
+          'valider Eintrag wird angelegt und angezeigt',
+          !!entriesRow,
+          entriesContainer.innerHTML.slice(0, 300)
+        );
+
+        // Toast should be visible (a same-day daily-backup toast from the
+        // Aufgaben module may also be present in #toastRoot — match by content).
+        const toasts = Array.from(doc.querySelectorAll('#toastRoot .toast'));
+        const toast = toasts.find(t => /gespeichert/i.test(t.textContent));
+        record(
+          'Toast erscheint nach erfolgreichem Speichern',
+          !!toast,
+          toast ? toast.textContent : 'kein passender Toast unter ' + toasts.length
+        );
+
+        record('keine ungefangenen Exceptions waehrend Validierung', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+        renderResults();
+      }
+
+      $('rerunBtn').addEventListener('click', run);
+      run().catch(err => { caughtErrors.push({ message: 'runner: '+err.message, stack: err.stack }); renderResults(); });
+    })();
+  </script>
+</body>
+</html>

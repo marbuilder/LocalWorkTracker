@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T02 — Timer Start / Stop</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 240px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 700px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T02 — Timer Start / Stop</h1>
+  <p>Startet einen Timer, wartet eine Sekunde, stoppt ihn. Prüft Sticky-Bar, Stats und gespeicherten Eintrag.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 40%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_PREFIX = 'local-work-tracker-v1-time-entries';
+      let results = [], caughtErrors = [];
+      const $ = id => document.getElementById(id);
+      function record(name, pass, details) { results.push({ name, pass: !!pass, details: String(details ?? '') }); }
+      function renderResults() {
+        const tbody = $('results'); tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+          tr.innerHTML = '<td>'+r.name+'</td><td class="'+(r.pass?'pass':'fail')+'">'+(r.pass?'PASS':'FAIL')+'</td><td><pre>'+safe+'</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const all = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        $('status').innerHTML = noResults ? '<span>Running…</span>' : (all ? '<span class="pass">Alle Checks bestanden.</span>' : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        $('errors').textContent = caughtErrors.length ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n') : '(keine)';
+      }
+      function waitRaf(n=2) { return new Promise(r => { let i=0; const t=()=>(++i>=n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }); }
+      function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+      function dispatchInput(el, val) { el.value = val; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+      function clearKeys() {
+        const rm = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === STORAGE_PREFIX || k.startsWith(STORAGE_PREFIX + '-'))) rm.push(k);
+        }
+        rm.forEach(k => localStorage.removeItem(k));
+      }
+      function hookErrors(win) {
+        win.addEventListener('error', e => caughtErrors.push({ message: 'error: ' + e.message, stack: e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}` }));
+        win.addEventListener('unhandledrejection', e => { const r = e.reason; caughtErrors.push({ message: 'rejection: ' + (r?.message || String(r)), stack: r?.stack || '' }); });
+      }
+      function load(iframe) {
+        return new Promise((res, rej) => {
+          iframe.addEventListener('load', () => res(), { once: true });
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => rej(new Error('load timeout')), 5000);
+        });
+      }
+
+      async function run() {
+        results = []; caughtErrors = []; renderResults();
+        clearKeys();
+        const iframe = $('app');
+        try { await load(iframe); } catch (e) { record('iframe laedt', false, e.message); renderResults(); return; }
+        const win = iframe.contentWindow, doc = iframe.contentDocument;
+        hookErrors(win); await waitRaf(3);
+
+        const ticketNumber = doc.getElementById('ticketNumber');
+        const startBtn = doc.getElementById('startBtn');
+        const stopBtn = doc.getElementById('stopBtn');
+        const currentTimer = doc.getElementById('currentTimer');
+
+        // Initial: kein aktiver Timer
+        record('Initial: currentTimer zeigt "Kein aktiver Timer"', /Kein aktiver Timer/.test(currentTimer.textContent), currentTimer.textContent.slice(0, 200));
+
+        // Start Timer
+        dispatchInput(ticketNumber, 'T-START');
+        startBtn.click();
+        await waitRaf(3);
+
+        const pill = currentTimer.querySelector('.pill');
+        const liveDuration = currentTimer.querySelector('.live-duration');
+        record('nach Start: Sticky-Bar zeigt "● Aktiv"-Pill', !!pill && /Aktiv/.test(pill.textContent), pill ? pill.textContent : 'kein pill');
+        record('nach Start: Sticky-Bar zeigt Ticket "T-START"', /T-START/.test(currentTimer.textContent), currentTimer.textContent.slice(0, 200));
+        record('nach Start: .live-duration vorhanden', !!liveDuration, liveDuration ? liveDuration.textContent : 'fehlt');
+
+        // localStorage activeTimer set
+        const stateAfterStart = JSON.parse(win.localStorage.getItem('local-work-tracker-v1-time-entries'));
+        record('localStorage activeTimer gesetzt mit Ticket T-START', stateAfterStart?.activeTimer?.ticket === 'T-START', JSON.stringify(stateAfterStart?.activeTimer));
+
+        // Wait ~1.2s damit elapsedMs > 1s
+        await sleep(1200);
+        await waitRaf(2);
+
+        // Stop
+        stopBtn.click();
+        await waitRaf(3);
+
+        const stateAfterStop = JSON.parse(win.localStorage.getItem('local-work-tracker-v1-time-entries'));
+        record('nach Stop: activeTimer = null', stateAfterStop?.activeTimer === null, JSON.stringify(stateAfterStop?.activeTimer));
+        record('nach Stop: 1 Eintrag in localStorage', Array.isArray(stateAfterStop?.entries) && stateAfterStop.entries.length === 1 && stateAfterStop.entries[0].source === 'timer', JSON.stringify(stateAfterStop?.entries));
+
+        const entriesRow = doc.querySelector('#entriesContainer table tbody tr');
+        record('nach Stop: Eintrag in Tabelle sichtbar', !!entriesRow && /T-START/.test(entriesRow.textContent), entriesRow ? entriesRow.textContent.slice(0, 200) : 'keine Zeile');
+
+        // A same-day daily-backup toast from the Aufgaben module may also be
+        // present in #toastRoot — match by content instead of taking the first.
+        const toasts = Array.from(doc.querySelectorAll('#toastRoot .toast'));
+        const toast = toasts.find(t => /gestoppt/i.test(t.textContent));
+        record('Stop-Toast erscheint', !!toast, toast ? toast.textContent : 'kein passender Toast unter ' + toasts.length);
+
+        // currentTimer zurück auf "Kein aktiver Timer"
+        record('nach Stop: currentTimer zurück auf "Kein aktiver Timer"', /Kein aktiver Timer/.test(currentTimer.textContent), currentTimer.textContent.slice(0, 200));
+
+        record('keine ungefangenen Exceptions waehrend Timer-Flow', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+        renderResults();
+      }
+
+      $('rerunBtn').addEventListener('click', run);
+      run().catch(err => { caughtErrors.push({ message: 'runner: '+err.message, stack: err.stack }); renderResults(); });
+    })();
+  </script>
+</body>
+</html>

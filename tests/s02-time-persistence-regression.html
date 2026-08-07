@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S01 persistence regression</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>S01 Persistence Regression</h1>
+  <p>This page exercises the browser-storage normalization contract without dependencies. It writes and reads deterministic localStorage fixtures, then reports visible pass/fail output so malformed saved state is easy to distinguish from valid persisted state.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable localStorage</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 's01-regression-state';
+      const CUSTOM_TICKETS_KEY = STORAGE_KEY + '-ticket-suggestions';
+      const results = [];
+
+      function sanitizeText(value, maxLen) {
+        return String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+
+      function isValidEntry(e) {
+        return e && typeof e === 'object' && typeof e.ticket === 'string' && typeof e.task === 'string' &&
+          Number.isFinite(Number(e.startTs)) && Number.isFinite(Number(e.endTs));
+      }
+
+      function isValidActiveTimer(e) {
+        return e && typeof e === 'object' && typeof e.ticket === 'string' && typeof e.task === 'string' &&
+          Number.isFinite(Number(e.startTs));
+      }
+
+      function normalizeEntry(e) {
+        return {
+          id: typeof e.id === 'string' ? e.id : 'generated-id',
+          ticket: sanitizeText(e.ticket, 60),
+          task: sanitizeText(e.task, 120),
+          project: sanitizeText(e.project || '', 120),
+          notes: sanitizeText(e.notes || '', 2000),
+          startTs: Number(e.startTs),
+          endTs: Number(e.endTs),
+          pauseMinutes: clampNumber(e.pauseMinutes || 0, 0, 24 * 60),
+          createdAt: Number.isFinite(Number(e.createdAt)) ? Number(e.createdAt) : 0,
+          source: e.source === 'manual' ? 'manual' : 'timer'
+        };
+      }
+
+      function normalizeActiveTimer(e) {
+        return {
+          id: typeof e.id === 'string' ? e.id : 'generated-id',
+          ticket: sanitizeText(e.ticket, 60),
+          task: sanitizeText(e.task, 120),
+          project: sanitizeText(e.project || '', 120),
+          notes: sanitizeText(e.notes || '', 2000),
+          startTs: Number(e.startTs)
+        };
+      }
+
+      function normalizePersistedState(rawState, rawTickets) {
+        const normalized = { entries: [], activeTimer: null, customTickets: [] };
+        try {
+          const parsedState = rawState ? JSON.parse(rawState) : null;
+          if (parsedState && typeof parsedState === 'object') {
+            if (Array.isArray(parsedState.entries)) {
+              normalized.entries = parsedState.entries.filter(isValidEntry).map(normalizeEntry);
+            }
+            if (parsedState.activeTimer && isValidActiveTimer(parsedState.activeTimer)) {
+              normalized.activeTimer = normalizeActiveTimer(parsedState.activeTimer);
+            }
+          }
+        } catch (err) {
+          console.warn('state parse failed', err);
+        }
+        try {
+          const parsedTickets = rawTickets ? JSON.parse(rawTickets) : [];
+          if (Array.isArray(parsedTickets)) {
+            normalized.customTickets = parsedTickets.map(ticket => sanitizeText(ticket, 60)).filter(Boolean);
+          }
+        } catch (err) {
+          console.warn('tickets parse failed', err);
+        }
+        normalized.customTickets = [...new Set(normalized.customTickets)].sort((a, b) => a.localeCompare(b, 'de'));
+        return normalized;
+      }
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + row.details.replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify({
+          storageKey: STORAGE_KEY,
+          storedState: localStorage.getItem(STORAGE_KEY),
+          storedTickets: localStorage.getItem(CUSTOM_TICKETS_KEY)
+        }, null, 2);
+      }
+
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(CUSTOM_TICKETS_KEY);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        entries: [
+          { ticket: '  Alpha\u0000  ', task: '  Task\u0007  ', project: 'Proj', notes: 'Note', startTs: '1000', endTs: 2500, pauseMinutes: 15, createdAt: 'oops' },
+          { ticket: 'bad' }
+        ],
+        activeTimer: { ticket: '  Live  ', task: '  Current\u0000  ', project: 'P', notes: 'N', startTs: '5000' }
+      }));
+      localStorage.setItem(CUSTOM_TICKETS_KEY, JSON.stringify(['  Foo  ', '', null, 'Bar', 'Foo']));
+
+      const normalized = normalizePersistedState(localStorage.getItem(STORAGE_KEY), localStorage.getItem(CUSTOM_TICKETS_KEY));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries: normalized.entries, activeTimer: normalized.activeTimer }));
+      localStorage.setItem(CUSTOM_TICKETS_KEY, JSON.stringify(normalized.customTickets));
+
+      assert('malformed entries are filtered and normalized', normalized.entries.length === 1 && normalized.entries[0].ticket === 'Alpha' && normalized.entries[0].task === 'Task' && normalized.entries[0].pauseMinutes === 15 && normalized.entries[0].source === 'timer', JSON.stringify(normalized.entries[0]));
+      assert('active timer is restored with normalized text fields', normalized.activeTimer && normalized.activeTimer.ticket === 'Live' && normalized.activeTimer.task === 'Current' && normalized.activeTimer.startTs === 5000, JSON.stringify(normalized.activeTimer));
+      assert('remembered tickets are deduplicated and trimmed', normalized.customTickets.length === 2 && normalized.customTickets[0] === 'Bar' && normalized.customTickets[1] === 'Foo', JSON.stringify(normalized.customTickets));
+      assert('persisted payload remains inspectable and deterministic', localStorage.getItem(STORAGE_KEY).includes('Alpha') && localStorage.getItem(CUSTOM_TICKETS_KEY).includes('Foo'), JSON.stringify({ state: localStorage.getItem(STORAGE_KEY), tickets: localStorage.getItem(CUSTOM_TICKETS_KEY) }));
+
+      render();
+    })();
+  </script>
+</body>
+</html>

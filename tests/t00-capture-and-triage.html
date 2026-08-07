@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T00 capture and triage</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T00 Capture and Triage</h1>
+  <p>Pins the capture and triage contract: quick capture creates an inbox task with no priority and no effort, triage sets both, and no task can leave the inbox until both are present. Clearing either one pushes an assessed task back into the inbox.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable state</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const results = [];
+      const MAX_TITLE = 120, MAX_NOTES = 2000, MAX_CONTEXT = 40, MAX_EXTERNAL_REF = 60, MAX_CARRY = 99;
+      const PRIORITY_KEYS = ['zero', 'eighty', 'nice'];
+      const EFFORT_KEYS = ['quick', 'small', 'medium', 'toolarge'];
+      const STATUS_KEYS = ['inbox', 'backlog', 'planned', 'done', 'dropped', 'escalated'];
+      const TERMINAL = ['done', 'dropped', 'escalated'];
+      const isTerminal = key => TERMINAL.includes(key);
+
+      // Deterministic clock — never Date.now() in a test.
+      let clock = 1000;
+      const now = () => (clock += 10);
+
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+      function parseIsoWeekKey(key) {
+        const m = /^(\d{4})-W(\d{2})$/.exec(String(key || ''));
+        if (!m) return null;
+        const week = Number(m[2]);
+        if (week < 1 || week > 53) return null;
+        return { year: Number(m[1]), week };
+      }
+      function normalizeTask(t) {
+        const priority = PRIORITY_KEYS.includes(t.priority) ? t.priority : null;
+        const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
+        let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
+        let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
+        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        if (status === 'planned' && !plannedWeek) status = 'backlog';
+        if (status !== 'planned') plannedWeek = null;
+        const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
+        const updatedAt = Number.isFinite(Number(t.updatedAt)) ? Number(t.updatedAt) : createdAt;
+        const doneAt = Number.isFinite(Number(t.doneAt)) && Number(t.doneAt) > 0 ? Number(t.doneAt) : null;
+        return {
+          id: typeof t.id === 'string' && t.id ? t.id : 'generated-id',
+          title: sanitizeText(t.title, MAX_TITLE),
+          notes: sanitizeText(t.notes || '', MAX_NOTES),
+          context: sanitizeText(t.context || '', MAX_CONTEXT),
+          priority, effort, status, plannedWeek,
+          todayFlag: status === 'planned' ? Boolean(t.todayFlag) : false,
+          carryCount: clampNumber(t.carryCount || 0, 0, MAX_CARRY),
+          externalRef: sanitizeText(t.externalRef || '', MAX_EXTERNAL_REF),
+          createdAt, updatedAt,
+          doneAt: isTerminal(status) ? (doneAt || updatedAt || createdAt) : null
+        };
+      }
+
+      // ── Reducers under test, copied from index.html ──────────
+      const tasks = [];
+      const findTask = id => tasks.find(t => t.id === id) || null;
+      let idCounter = 0;
+      const nextId = () => 'task-' + (++idCounter);
+
+      function captureTask(title) {
+        const clean = sanitizeText(title, MAX_TITLE);
+        if (!clean) return null;
+        const ts = now();
+        const task = normalizeTask({
+          id: nextId(), title: clean, notes: '', context: '',
+          priority: null, effort: null, status: 'inbox', plannedWeek: null,
+          todayFlag: false, carryCount: 0, externalRef: '',
+          createdAt: ts, updatedAt: ts, doneAt: null
+        });
+        tasks.unshift(task);
+        return task;
+      }
+
+      function setPriority(id, priority) {
+        const task = findTask(id);
+        if (!task || !PRIORITY_KEYS.includes(priority)) return;
+        task.priority = task.priority === priority ? null : priority;
+        if (!task.priority && task.status !== 'inbox') task.status = 'inbox';
+        task.updatedAt = now();
+      }
+
+      function setEffort(id, effort) {
+        const task = findTask(id);
+        if (!task || !EFFORT_KEYS.includes(effort)) return;
+        task.effort = task.effort === effort ? null : effort;
+        if (!task.effort && task.status !== 'inbox') task.status = 'inbox';
+        task.updatedAt = now();
+      }
+
+      function moveToBacklog(id) {
+        const task = findTask(id);
+        if (!task || !task.priority || !task.effort) return;
+        task.status = 'backlog';
+        task.plannedWeek = null;
+        task.todayFlag = false;
+        task.doneAt = null;
+        task.updatedAt = now();
+      }
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + String(row.details).replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify(tasks, null, 2);
+      }
+
+      try {
+        const captured = captureTask('  Renovate-PRs stauen sich\u0000  ');
+        assert('capture creates an inbox task without priority or effort',
+          captured && captured.status === 'inbox' && captured.priority === null &&
+          captured.effort === null && captured.title === 'Renovate-PRs stauen sich' &&
+          captured.carryCount === 0 && captured.doneAt === null,
+          JSON.stringify(captured));
+
+        assert('capture rejects empty and whitespace-only titles',
+          captureTask('') === null && captureTask('   ') === null &&
+          captureTask('\u0000\u0007') === null && tasks.length === 1,
+          JSON.stringify({ count: tasks.length }));
+
+        const id = captured.id;
+        moveToBacklog(id);
+        assert('a task cannot leave the inbox without priority and effort',
+          findTask(id).status === 'inbox',
+          JSON.stringify(findTask(id)));
+
+        setPriority(id, 'eighty');
+        moveToBacklog(id);
+        assert('priority alone is not enough to leave the inbox',
+          findTask(id).priority === 'eighty' && findTask(id).status === 'inbox',
+          JSON.stringify(findTask(id)));
+
+        setEffort(id, 'small');
+        moveToBacklog(id);
+        assert('with both set the task moves to the backlog',
+          findTask(id).status === 'backlog' && findTask(id).effort === 'small' &&
+          findTask(id).plannedWeek === null && findTask(id).todayFlag === false,
+          JSON.stringify(findTask(id)));
+
+        setEffort(id, 'small'); // clicking the active chip again clears it
+        assert('clearing the effort pushes an assessed task back to the inbox',
+          findTask(id).effort === null && findTask(id).status === 'inbox',
+          JSON.stringify(findTask(id)));
+
+        setEffort(id, 'medium');
+        moveToBacklog(id);
+        setPriority(id, 'eighty'); // toggling the active priority off
+        assert('clearing the priority pushes an assessed task back to the inbox',
+          findTask(id).priority === null && findTask(id).status === 'inbox',
+          JSON.stringify(findTask(id)));
+
+        const before = findTask(id).updatedAt;
+        setPriority(id, 'not-a-priority');
+        setEffort(id, 'not-an-effort');
+        assert('unknown priority and effort values are ignored',
+          findTask(id).priority === null && findTask(id).effort === 'medium' &&
+          findTask(id).updatedAt === before,
+          JSON.stringify(findTask(id)));
+
+        assert('titles are truncated to the documented maximum',
+          captureTask('x'.repeat(MAX_TITLE + 40)).title.length === MAX_TITLE,
+          JSON.stringify({ max: MAX_TITLE }));
+      } catch (err) {
+        console.error(err);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

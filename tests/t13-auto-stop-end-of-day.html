@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T08 — Auto-Stop am Tagesende</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 240px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 700px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T08 — Auto-Stop am Tagesende</h1>
+  <p>Setzt einen <code>activeTimer</code> auf gestern in <code>localStorage</code>, lädt die App und prüft, dass beim Boot automatisch ein Eintrag mit <code>endTs = 23:59:59.999</code> des Vortages angelegt und <code>activeTimer = null</code> gesetzt wurde. Plus: Toast wird angezeigt.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 40%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_PREFIX = 'local-work-tracker-v1-time-entries';
+      let results = [], caughtErrors = [];
+      const $ = id => document.getElementById(id);
+      function record(name, pass, details) { results.push({ name, pass: !!pass, details: String(details ?? '') }); }
+      function renderResults() {
+        const tbody = $('results'); tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+          tr.innerHTML = '<td>'+r.name+'</td><td class="'+(r.pass?'pass':'fail')+'">'+(r.pass?'PASS':'FAIL')+'</td><td><pre>'+safe+'</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const all = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        $('status').innerHTML = noResults ? 'Running…' : (all ? '<span class="pass">Alle Checks bestanden.</span>' : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        $('errors').textContent = caughtErrors.length ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n') : '(keine)';
+      }
+      function waitRaf(n=2) { return new Promise(r => { let i=0; const t=()=>(++i>=n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }); }
+      function clearKeys() {
+        const rm = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === STORAGE_PREFIX || k.startsWith(STORAGE_PREFIX + '-'))) rm.push(k);
+        }
+        rm.forEach(k => localStorage.removeItem(k));
+      }
+      function hookErrors(win) {
+        win.addEventListener('error', e => caughtErrors.push({ message: 'error: ' + e.message, stack: e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}` }));
+        win.addEventListener('unhandledrejection', e => { const r = e.reason; caughtErrors.push({ message: 'rejection: ' + (r?.message || String(r)), stack: r?.stack || '' }); });
+      }
+      function load(iframe) {
+        return new Promise((res, rej) => {
+          iframe.addEventListener('load', () => res(), { once: true });
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => rej(new Error('load timeout')), 5000);
+        });
+      }
+
+      function endOfDay(ts) {
+        const d = new Date(ts);
+        d.setHours(23, 59, 59, 999);
+        return d.getTime();
+      }
+
+      async function run() {
+        results = []; caughtErrors = []; renderResults();
+        clearKeys();
+
+        // Pre-seed localStorage: activeTimer started yesterday at 10:00
+        const yesterday = new Date(Date.now() - 25 * 60 * 60 * 1000);
+        yesterday.setHours(10, 0, 0, 0);
+        const yesterdayStartTs = yesterday.getTime();
+        const expectedEndTs = endOfDay(yesterdayStartTs);
+        localStorage.setItem(STORAGE_PREFIX, JSON.stringify({
+          entries: [],
+          activeTimer: {
+            id: 'preexisting-id',
+            ticket: 'T-OVERNIGHT',
+            notes: 'aus dem Vortag',
+            startTs: yesterdayStartTs
+          }
+        }));
+
+        const iframe = $('app');
+        try { await load(iframe); } catch (e) { record('iframe laedt', false, e.message); renderResults(); return; }
+        const win = iframe.contentWindow, doc = iframe.contentDocument;
+        hookErrors(win); await waitRaf(3);
+
+        const raw = win.localStorage.getItem(STORAGE_PREFIX);
+        const state = JSON.parse(raw);
+
+        record(
+          'nach Boot: activeTimer wurde geleert',
+          state.activeTimer === null,
+          'activeTimer=' + JSON.stringify(state.activeTimer)
+        );
+        record(
+          'nach Boot: 1 Eintrag automatisch angelegt',
+          Array.isArray(state.entries) && state.entries.length === 1,
+          JSON.stringify(state.entries)
+        );
+
+        const entry = state.entries[0] || {};
+        record(
+          'Auto-Eintrag hat das Ticket des aktiven Timers',
+          entry.ticket === 'T-OVERNIGHT',
+          'ticket=' + entry.ticket
+        );
+        record(
+          'Auto-Eintrag hat startTs des aktiven Timers',
+          entry.startTs === yesterdayStartTs,
+          'startTs=' + entry.startTs + ' expected=' + yesterdayStartTs
+        );
+        record(
+          'Auto-Eintrag hat endTs = 23:59:59.999 des Starttags',
+          entry.endTs === expectedEndTs,
+          'endTs=' + entry.endTs + ' expected=' + expectedEndTs
+        );
+        record(
+          'Auto-Eintrag ist als source="timer" markiert',
+          entry.source === 'timer',
+          'source=' + entry.source
+        );
+
+        await waitRaf(3);
+        const toast = Array.from(doc.querySelectorAll('#toastRoot .toast')).find(t => /Tagesende/i.test(t.textContent));
+        record(
+          'Toast mit "Tagesende"-Hinweis erscheint nach Auto-Stop',
+          !!toast,
+          toast ? toast.textContent : 'kein Tagesende-Toast (alle: ' + Array.from(doc.querySelectorAll('#toastRoot .toast')).map(t => t.textContent).join(' | ') + ')'
+        );
+
+        const currentTimer = doc.getElementById('currentTimer');
+        record(
+          'currentTimer zeigt "Kein aktiver Timer"',
+          /Kein aktiver Timer/.test(currentTimer.textContent),
+          currentTimer.textContent.slice(0, 200)
+        );
+
+        record('keine ungefangenen Exceptions', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+        renderResults();
+      }
+
+      $('rerunBtn').addEventListener('click', run);
+      run().catch(err => { caughtErrors.push({ message: 'runner: '+err.message, stack: err.stack }); renderResults(); });
+    })();
+  </script>
+</body>
+</html>

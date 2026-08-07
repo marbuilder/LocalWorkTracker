@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T07 — Bearbeiten, Löschen, Undo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 240px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 1000px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T07 — Bearbeiten, Löschen, Undo</h1>
+  <p>Eintrag anlegen, bearbeiten, löschen, über Toast wiederherstellen.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 40%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_PREFIX = 'local-time-tracker-v1';
+      let results = [], caughtErrors = [];
+      const $ = id => document.getElementById(id);
+      function record(name, pass, details) { results.push({ name, pass: !!pass, details: String(details ?? '') }); }
+      function renderResults() {
+        const tbody = $('results'); tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+          tr.innerHTML = '<td>'+r.name+'</td><td class="'+(r.pass?'pass':'fail')+'">'+(r.pass?'PASS':'FAIL')+'</td><td><pre>'+safe+'</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const all = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        $('status').innerHTML = noResults ? 'Running…' : (all ? '<span class="pass">Alle Checks bestanden.</span>' : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        $('errors').textContent = caughtErrors.length ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n') : '(keine)';
+      }
+      function waitRaf(n=2) { return new Promise(r => { let i=0; const t=()=>(++i>=n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }); }
+      function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+      function dispatchInput(el, val) { el.value = val; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+      function clearKeys() {
+        const rm = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === STORAGE_PREFIX || k.startsWith(STORAGE_PREFIX + '-'))) rm.push(k);
+        }
+        rm.forEach(k => localStorage.removeItem(k));
+      }
+      function hookErrors(win) {
+        win.addEventListener('error', e => caughtErrors.push({ message: 'error: ' + e.message, stack: e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}` }));
+        win.addEventListener('unhandledrejection', e => { const r = e.reason; caughtErrors.push({ message: 'rejection: ' + (r?.message || String(r)), stack: r?.stack || '' }); });
+      }
+      function load(iframe) {
+        return new Promise((res, rej) => {
+          iframe.addEventListener('load', () => res(), { once: true });
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => rej(new Error('load timeout')), 5000);
+        });
+      }
+
+      async function run() {
+        results = []; caughtErrors = []; renderResults();
+        clearKeys();
+        const iframe = $('app');
+        try { await load(iframe); } catch (e) { record('iframe laedt', false, e.message); renderResults(); return; }
+        const win = iframe.contentWindow, doc = iframe.contentDocument;
+        hookErrors(win); await waitRaf(3);
+
+        // Anlegen
+        dispatchInput(doc.getElementById('manualTicket'), 'T-EDIT');
+        dispatchInput(doc.getElementById('manualStart'), '09:00');
+        dispatchInput(doc.getElementById('manualEnd'), '10:00');
+        dispatchInput(doc.getElementById('manualPause'), '0');
+        dispatchInput(doc.getElementById('manualNotes'), 'Original');
+        doc.getElementById('addManualBtn').click();
+        await waitRaf(3);
+
+        let entriesRow = doc.querySelector('#entriesContainer table tbody tr');
+        record('Eintrag angelegt', !!entriesRow && /T-EDIT/.test(entriesRow.textContent), entriesRow ? entriesRow.textContent.slice(0, 200) : 'keine zeile');
+
+        // Bearbeiten-Button finden und klicken
+        const editBtn = Array.from(entriesRow.querySelectorAll('button')).find(b => /Bearbeiten/.test(b.textContent));
+        editBtn.click();
+        await waitRaf(2);
+        const editDialog = doc.getElementById('editDialog');
+        record('Edit-Dialog ist offen', editDialog.open, 'open=' + editDialog.open);
+
+        // Notizen aendern, speichern
+        dispatchInput(doc.getElementById('editNotes'), 'Geaendert');
+        doc.getElementById('saveEditBtn').click();
+        await waitRaf(3);
+        record('Edit-Dialog geschlossen nach Speichern', !editDialog.open, 'open=' + editDialog.open);
+
+        const stateAfterEdit = JSON.parse(win.localStorage.getItem('local-time-tracker-v1'));
+        record('Eintrag in localStorage hat neue Notizen', stateAfterEdit.entries[0].notes === 'Geaendert', stateAfterEdit.entries[0].notes);
+
+        const updatedToast = Array.from(doc.querySelectorAll('#toastRoot .toast')).find(t => /aktualisiert/i.test(t.textContent));
+        record('Toast nach Speichern: "aktualisiert"', !!updatedToast, updatedToast ? updatedToast.textContent : 'kein matching toast (alle: ' + Array.from(doc.querySelectorAll('#toastRoot .toast')).map(t => t.textContent).join(' | ') + ')');
+
+        // Loeschen
+        entriesRow = doc.querySelector('#entriesContainer table tbody tr');
+        const delBtn = Array.from(entriesRow.querySelectorAll('button')).find(b => /Löschen/.test(b.textContent));
+        delBtn.click();
+        await waitRaf(2);
+        const confirmDialog = doc.getElementById('confirmDialog');
+        record('Confirm-Dialog (Loeschen) ist offen', confirmDialog.open, 'open=' + confirmDialog.open);
+
+        const confirmBtn = Array.from(confirmDialog.querySelectorAll('#confirmDialogActions button')).find(b => /Löschen/.test(b.textContent) && b.classList.contains('bad'));
+        record('Loeschen-Button ist rot (.bad)', !!confirmBtn, confirmBtn ? confirmBtn.outerHTML.slice(0, 200) : 'fehlt');
+        confirmBtn.click();
+        await waitRaf(3);
+
+        const stateAfterDelete = JSON.parse(win.localStorage.getItem('local-time-tracker-v1'));
+        record('nach Loeschen: 0 Eintraege', stateAfterDelete.entries.length === 0, JSON.stringify(stateAfterDelete.entries));
+        record('Tabelle zeigt Empty-State', !!doc.querySelector('#entriesContainer .empty'), doc.getElementById('entriesContainer').innerHTML.slice(0, 200));
+
+        // Undo via Toast
+        const undoToast = Array.from(doc.querySelectorAll('#toastRoot .toast')).find(t => /Rückgängig/i.test(t.textContent));
+        record('Toast mit "Rückgängig"-Button erscheint', !!undoToast, undoToast ? undoToast.textContent : 'kein toast');
+        const undoBtn = undoToast.querySelector('button');
+        undoBtn.click();
+        await waitRaf(3);
+
+        const stateAfterUndo = JSON.parse(win.localStorage.getItem('local-time-tracker-v1'));
+        record('nach Undo: 1 Eintrag mit gleichem Ticket', stateAfterUndo.entries.length === 1 && stateAfterUndo.entries[0].ticket === 'T-EDIT', JSON.stringify(stateAfterUndo.entries));
+        const rowAfterUndo = doc.querySelector('#entriesContainer table tbody tr');
+        record('Eintrag in Tabelle sichtbar nach Undo', !!rowAfterUndo && /T-EDIT/.test(rowAfterUndo.textContent), rowAfterUndo ? rowAfterUndo.textContent.slice(0, 200) : 'fehlt');
+
+        record('keine ungefangenen Exceptions', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+        renderResults();
+      }
+
+      $('rerunBtn').addEventListener('click', run);
+      run().catch(err => { caughtErrors.push({ message: 'runner: '+err.message, stack: err.stack }); renderResults(); });
+    })();
+  </script>
+</body>
+</html>

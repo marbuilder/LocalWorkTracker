@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T02 week planning and carry-over</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T02 Week Planning and Carry-Over</h1>
+  <p>Pins the ISO week arithmetic and the carry-over contract. Week keys use the ISO week-numbering year, which diverges from the calendar year around New Year — so week keys must be compared by their Monday, never as strings. Carrying a task over increments <code>carryCount</code>, clears the today focus, and crosses year boundaries correctly.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable state</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const results = [];
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const MAX_CARRY = 99;
+      const CARRY_WARN = 3;
+
+      let clock = 1000;
+      const now = () => (clock += 10);
+
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+
+      // ── ISO week helpers, copied from index.html ─────────────
+      function startOfDay(date) {
+        const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
+      function isoWeekday(date) {
+        return date.getDay() === 0 ? 7 : date.getDay();
+      }
+      function isoWeekMonday(date) {
+        const d = startOfDay(date);
+        d.setDate(d.getDate() - (isoWeekday(d) - 1));
+        return d;
+      }
+      function isoWeekKey(date) {
+        const monday = isoWeekMonday(date instanceof Date ? date : new Date(date));
+        const thursday = new Date(monday);
+        thursday.setDate(thursday.getDate() + 3);
+        const year = thursday.getFullYear();
+        const firstThursday = new Date(year, 0, 4);
+        const firstMonday = isoWeekMonday(firstThursday);
+        const week = Math.round((monday - firstMonday) / (7 * DAY_MS)) + 1;
+        return `${year}-W${String(week).padStart(2, '0')}`;
+      }
+      function parseIsoWeekKey(key) {
+        const m = /^(\d{4})-W(\d{2})$/.exec(String(key || ''));
+        if (!m) return null;
+        const week = Number(m[2]);
+        if (week < 1 || week > 53) return null;
+        return { year: Number(m[1]), week };
+      }
+      function isoWeekStart(key) {
+        const parsed = parseIsoWeekKey(key);
+        if (!parsed) return null;
+        const firstMonday = isoWeekMonday(new Date(parsed.year, 0, 4));
+        const d = new Date(firstMonday);
+        d.setDate(d.getDate() + (parsed.week - 1) * 7);
+        return d;
+      }
+      function weekKeyOffset(key, delta) {
+        const start = isoWeekStart(key);
+        if (!start) return key;
+        const d = new Date(start);
+        d.setDate(d.getDate() + delta * 7);
+        return isoWeekKey(d);
+      }
+      function compareWeekKeys(a, b) {
+        const sa = isoWeekStart(a);
+        const sb = isoWeekStart(b);
+        if (!sa && !sb) return 0;
+        if (!sa) return -1;
+        if (!sb) return 1;
+        return sa - sb;
+      }
+      function formatWeekLabel(key) {
+        const start = isoWeekStart(key);
+        const parsed = parseIsoWeekKey(key);
+        if (!start || !parsed) return String(key || '');
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        const dm = d => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.`;
+        return `KW ${parsed.week} (${dm(start)}–${dm(end)}${end.getFullYear()})`;
+      }
+
+      // ── Reducers under test, copied from index.html ──────────
+      const tasks = [];
+      const findTask = id => tasks.find(t => t.id === id) || null;
+      let idCounter = 0;
+
+      function makeplanned(weekKey, carryCount) {
+        const ts = now();
+        const task = {
+          id: 'task-' + (++idCounter), title: 'Aufgabe ' + idCounter, notes: '', context: '',
+          priority: 'eighty', effort: 'small', status: 'planned', plannedWeek: weekKey,
+          todayFlag: true, carryCount: carryCount || 0, externalRef: '',
+          createdAt: ts, updatedAt: ts, doneAt: null
+        };
+        tasks.push(task);
+        return task;
+      }
+
+      function carryOverTask(id, delta) {
+        const task = findTask(id);
+        if (!task || task.status !== 'planned') return;
+        const nextWeek = weekKeyOffset(task.plannedWeek, delta || 1);
+        if (!parseIsoWeekKey(nextWeek)) return;
+        task.plannedWeek = nextWeek;
+        task.carryCount = clampNumber(task.carryCount + 1, 0, MAX_CARRY);
+        task.todayFlag = false;
+        task.updatedAt = now();
+      }
+
+      function leftoverTasks(weekKey) {
+        return tasks.filter(t => t.status === 'planned' && compareWeekKeys(t.plannedWeek, weekKey) < 0);
+      }
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + String(row.details).replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify(tasks, null, 2);
+      }
+
+      try {
+        // ── ISO week keys ─────────────────────────────────────
+        assert('known dates map to their ISO week key',
+          isoWeekKey(new Date(2026, 7, 3)) === '2026-W32' &&   // Mon 03.08.2026
+          isoWeekKey(new Date(2026, 7, 9)) === '2026-W32' &&   // Sun 09.08.2026, same week
+          isoWeekKey(new Date(2026, 7, 10)) === '2026-W33',    // Mon 10.08.2026
+          JSON.stringify({
+            mon: isoWeekKey(new Date(2026, 7, 3)),
+            sun: isoWeekKey(new Date(2026, 7, 9)),
+            nextMon: isoWeekKey(new Date(2026, 7, 10))
+          }));
+
+        assert('the week-numbering year differs from the calendar year at New Year',
+          // 01.01.2027 is a Friday, still in the last ISO week of 2026.
+          isoWeekKey(new Date(2027, 0, 1)) === '2026-W53' &&
+          // 04.01.2027 is the Monday that opens 2027-W01.
+          isoWeekKey(new Date(2027, 0, 4)) === '2027-W01' &&
+          // 01.01.2026 is a Thursday, so it belongs to 2026-W01.
+          isoWeekKey(new Date(2026, 0, 1)) === '2026-W01',
+          JSON.stringify({
+            jan1_2027: isoWeekKey(new Date(2027, 0, 1)),
+            jan4_2027: isoWeekKey(new Date(2027, 0, 4)),
+            jan1_2026: isoWeekKey(new Date(2026, 0, 1))
+          }));
+
+        assert('week offsets cross the year boundary correctly',
+          weekKeyOffset('2026-W53', 1) === '2027-W01' &&
+          weekKeyOffset('2027-W01', -1) === '2026-W53' &&
+          weekKeyOffset('2026-W32', 3) === '2026-W35',
+          JSON.stringify({
+            forward: weekKeyOffset('2026-W53', 1),
+            back: weekKeyOffset('2027-W01', -1),
+            three: weekKeyOffset('2026-W32', 3)
+          }));
+
+        assert('week keys must be compared by date, not as strings',
+          // String comparison would put 2027-W01 before 2026-W53 — it does not.
+          compareWeekKeys('2026-W53', '2027-W01') < 0 &&
+          ('2026-W53' < '2027-W01') === true &&
+          compareWeekKeys('2026-W05', '2026-W32') < 0 &&
+          compareWeekKeys('2026-W32', '2026-W32') === 0,
+          JSON.stringify({ cmp: compareWeekKeys('2026-W53', '2027-W01') }));
+
+        assert('malformed week keys are rejected',
+          parseIsoWeekKey('2026-W00') === null &&
+          parseIsoWeekKey('2026-W54') === null &&
+          parseIsoWeekKey('2026-32') === null &&
+          parseIsoWeekKey('') === null &&
+          parseIsoWeekKey(null) === null,
+          JSON.stringify({ w00: parseIsoWeekKey('2026-W00'), w54: parseIsoWeekKey('2026-W54') }));
+
+        assert('week labels render the Monday-to-Sunday range',
+          formatWeekLabel('2026-W32') === 'KW 32 (03.08.–09.08.2026)',
+          formatWeekLabel('2026-W32'));
+
+        // ── Carry-over ────────────────────────────────────────
+        const task = makeplanned('2026-W32', 0);
+        carryOverTask(task.id, 1);
+        assert('carrying over moves the week, counts up and clears the today focus',
+          task.plannedWeek === '2026-W33' && task.carryCount === 1 && task.todayFlag === false,
+          JSON.stringify(task));
+
+        carryOverTask(task.id, 1);
+        carryOverTask(task.id, 1);
+        assert('the third carry-over reaches the warning threshold',
+          task.carryCount === CARRY_WARN && task.carryCount >= CARRY_WARN && task.plannedWeek === '2026-W35',
+          JSON.stringify(task));
+
+        const yearEnd = makeplanned('2026-W53', 0);
+        carryOverTask(yearEnd.id, 1);
+        assert('carry-over across the year boundary lands in the right week',
+          yearEnd.plannedWeek === '2027-W01' && yearEnd.carryCount === 1,
+          JSON.stringify(yearEnd));
+
+        const multi = makeplanned('2026-W30', 0);
+        carryOverTask(multi.id, 2);
+        assert('a multi-week carry-over still counts as a single postponement',
+          multi.plannedWeek === '2026-W32' && multi.carryCount === 1,
+          JSON.stringify(multi));
+
+        const capped = makeplanned('2026-W32', MAX_CARRY);
+        carryOverTask(capped.id, 1);
+        assert('carryCount is capped at the documented maximum',
+          capped.carryCount === MAX_CARRY,
+          JSON.stringify({ carryCount: capped.carryCount, max: MAX_CARRY }));
+
+        const leftovers = leftoverTasks('2026-W34');
+        assert('leftovers are the planned tasks sitting in earlier weeks',
+          leftovers.every(t => compareWeekKeys(t.plannedWeek, '2026-W34') < 0) &&
+          leftovers.some(t => t.id === multi.id) &&
+          !leftovers.some(t => t.id === yearEnd.id),
+          JSON.stringify(leftovers.map(t => ({ id: t.id, week: t.plannedWeek }))));
+
+        const doneTask = makeplanned('2026-W32', 0);
+        doneTask.status = 'done';
+        carryOverTask(doneTask.id, 1);
+        assert('a task that is not planned cannot be carried over',
+          doneTask.plannedWeek === '2026-W32' && doneTask.carryCount === 0,
+          JSON.stringify(doneTask));
+      } catch (err) {
+        console.error(err);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

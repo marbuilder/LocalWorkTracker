@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T10 — Zukünftige Startzeit (heute)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 240px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 700px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T10 — Zukünftige Startzeit (heute)</h1>
+  <p>Ein Timer mit Startzeit in der Zukunft (heute) wird über das Formular akzeptiert, zeigt "Geplant" mit rückwärts zählender Live-Laufzeit, und kann vor Erreichen der Startzeit ohne Eintrag verworfen werden. Ein vorab in localStorage gesetzter, wenige Sekunden in der Zukunft liegender Timer wechselt nach Erreichen der Startzeit automatisch zu einem normal aufwärts zählenden aktiven Timer.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 40%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_PREFIX = 'local-work-tracker-v1-time-entries';
+      let results = [], caughtErrors = [];
+      const $ = id => document.getElementById(id);
+      function record(name, pass, details) { results.push({ name, pass: !!pass, details: String(details ?? '') }); }
+      function renderResults() {
+        const tbody = $('results'); tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+          tr.innerHTML = '<td>'+r.name+'</td><td class="'+(r.pass?'pass':'fail')+'">'+(r.pass?'PASS':'FAIL')+'</td><td><pre>'+safe+'</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const all = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        $('status').innerHTML = noResults ? '<span>Running…</span>' : (all ? '<span class="pass">Alle Checks bestanden.</span>' : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        $('errors').textContent = caughtErrors.length ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n') : '(keine)';
+      }
+      function waitRaf(n=2) { return new Promise(r => { let i=0; const t=()=>(++i>=n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }); }
+      function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+      function dispatchInput(el, val) { el.value = val; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+      function clearKeys() {
+        const rm = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === STORAGE_PREFIX || k.startsWith(STORAGE_PREFIX + '-'))) rm.push(k);
+        }
+        rm.forEach(k => localStorage.removeItem(k));
+      }
+      function hookErrors(win) {
+        win.addEventListener('error', e => caughtErrors.push({ message: 'error: ' + e.message, stack: e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}` }));
+        win.addEventListener('unhandledrejection', e => { const r = e.reason; caughtErrors.push({ message: 'rejection: ' + (r?.message || String(r)), stack: r?.stack || '' }); });
+      }
+      function load(iframe) {
+        return new Promise((res, rej) => {
+          iframe.addEventListener('load', () => res(), { once: true });
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => rej(new Error('load timeout')), 5000);
+        });
+      }
+      function pad2(n) { return String(n).padStart(2, '0'); }
+
+      async function run() {
+        results = []; caughtErrors = []; renderResults();
+        clearKeys();
+        const iframe = $('app');
+        try { await load(iframe); } catch (e) { record('iframe laedt', false, e.message); renderResults(); return; }
+        const win = iframe.contentWindow, doc = iframe.contentDocument;
+        hookErrors(win); await waitRaf(3);
+
+        const ticketNumber = doc.getElementById('ticketNumber');
+        const timerStartTime = doc.getElementById('timerStartTime');
+        const startBtn = doc.getElementById('startBtn');
+        const stopBtn = doc.getElementById('stopBtn');
+
+        // Part A: schedule a start comfortably (2 minutes) in the future via the
+        // real #timerStartTime input (which only has minute granularity), so the
+        // check stays safely "pending" for the whole synchronous part of the test.
+        const target = new Date(Date.now() + 2 * 60 * 1000);
+        const futureValue = `${pad2(target.getHours())}:${pad2(target.getMinutes())}`;
+        dispatchInput(ticketNumber, 'FUTURE');
+        dispatchInput(timerStartTime, futureValue);
+        startBtn.click();
+        await waitRaf(3);
+
+        const stateAfterStart = JSON.parse(win.localStorage.getItem(STORAGE_PREFIX));
+        record('Timer mit Zukunfts-Startzeit wurde gestartet (kein Fehler)', stateAfterStart?.activeTimer?.ticket === 'FUTURE', JSON.stringify(stateAfterStart?.activeTimer));
+        record('gespeicherte startTs liegt in der Zukunft', stateAfterStart?.activeTimer?.startTs > Date.now(), 'startTs - now = ' + (stateAfterStart?.activeTimer ? (stateAfterStart.activeTimer.startTs - Date.now()) : 'n/a'));
+
+        const pill = doc.querySelector('#currentTimer .pill');
+        record('Pill zeigt "Geplant" an', !!pill && /Geplant/.test(pill.textContent), pill ? pill.textContent : 'kein Pill');
+        record('Pill hat Klasse "pending"', !!pill && pill.classList.contains('pending'), pill ? pill.className : 'kein Pill');
+
+        const liveDuration = doc.querySelector('#currentTimer .live-duration');
+        record('Live-Laufzeit zeigt negativen Countdown', !!liveDuration && liveDuration.textContent.trim().startsWith('-'), liveDuration ? liveDuration.textContent : 'kein Element');
+
+        // Stop before the scheduled start arrives -> should cancel without creating an entry.
+        stopBtn.click();
+        await waitRaf(3);
+        const stateAfterCancel = JSON.parse(win.localStorage.getItem(STORAGE_PREFIX));
+        record('Stop vor Start verwirft den Timer ohne Eintrag', stateAfterCancel?.activeTimer === null && Array.isArray(stateAfterCancel?.entries) && stateAfterCancel.entries.length === 0, JSON.stringify(stateAfterCancel));
+
+        // Part B: pre-seed a precise, few-seconds-future activeTimer directly in
+        // localStorage (bypassing the minute-granularity input) and reload, so we
+        // can deterministically observe the countdown-to-active flip.
+        clearKeys();
+        const flipStartTs = Date.now() + 3000;
+        win.localStorage.setItem(STORAGE_PREFIX, JSON.stringify({
+          entries: [],
+          activeTimer: { id: 'preexisting-id', ticket: 'FLIP', notes: '', startTs: flipStartTs }
+        }));
+        try { await load(iframe); } catch (e) { record('iframe laedt (Teil B)', false, e.message); renderResults(); return; }
+        const win2 = iframe.contentWindow, doc2 = iframe.contentDocument;
+        hookErrors(win2); await waitRaf(3);
+
+        const pillBeforeFlip = doc2.querySelector('#currentTimer .pill');
+        record('Vor Erreichen der Startzeit: Pill zeigt "Geplant"', !!pillBeforeFlip && /Geplant/.test(pillBeforeFlip.textContent), pillBeforeFlip ? pillBeforeFlip.textContent : 'kein Pill');
+
+        await sleep(4500);
+        await waitRaf(3);
+
+        const pillAfterFlip = doc2.querySelector('#currentTimer .pill');
+        record('Nach Erreichen der Startzeit: Pill zeigt "Aktiv"', !!pillAfterFlip && /Aktiv/.test(pillAfterFlip.textContent) && !pillAfterFlip.classList.contains('pending'), pillAfterFlip ? pillAfterFlip.outerHTML : 'kein Pill');
+        const liveDurationAfterFlip = doc2.querySelector('#currentTimer .live-duration');
+        record('Nach Erreichen der Startzeit: Live-Laufzeit zaehlt ohne Minus aufwaerts', !!liveDurationAfterFlip && !liveDurationAfterFlip.textContent.trim().startsWith('-'), liveDurationAfterFlip ? liveDurationAfterFlip.textContent : 'kein Element');
+
+        // Clean stop to finish, verifying the flipped timer saves normally.
+        const stopBtn2 = doc2.getElementById('stopBtn');
+        stopBtn2.click();
+        await waitRaf(3);
+        const stateFinal = JSON.parse(win2.localStorage.getItem(STORAGE_PREFIX));
+        record('finaler Stop speichert genau einen Eintrag', Array.isArray(stateFinal?.entries) && stateFinal.entries.length === 1 && stateFinal.entries[0].ticket === 'FLIP', JSON.stringify(stateFinal?.entries));
+
+        record('keine ungefangenen Exceptions', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+        renderResults();
+      }
+
+      $('rerunBtn').addEventListener('click', run);
+      run().catch(err => { caughtErrors.push({ message: 'runner: '+err.message, stack: err.stack }); renderResults(); });
+    })();
+  </script>
+</body>
+</html>

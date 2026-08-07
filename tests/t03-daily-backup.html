@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T03 daily backup</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T03 Daily Backup</h1>
+  <p>Pins the backup-due contract. <code>backupIntervalDays</code> (default 1, 0 = disabled) is compared against the whole days since <code>lastBackupDate</code> — not a plain date-inequality check, so a 3-day interval does not fire every day. A download that raises no exception is treated as success and marks the day — a page cannot observe whether the file actually landed on disk. A download that throws leaves the date untouched and raises the banner, and only a real click can clear it.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable state</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const results = [];
+      const SCHEMA_VERSION = 1;
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const DEFAULT_BACKUP_INTERVAL_DAYS = 1;
+      const MAX_BACKUP_INTERVAL_DAYS = 30;
+
+      // Deterministic "today" — never Date.now() in a test.
+      let today = '2026-08-03';
+      const currentDate = () => today;
+
+      function formatDateInput(date) {
+        const d = date instanceof Date ? date : new Date(date);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+
+      // ── State and the backup reducer, copied from index.html ──
+      const state = { version: SCHEMA_VERSION, tasks: [], lastBackupDate: null, backupIntervalDays: DEFAULT_BACKUP_INTERVAL_DAYS };
+      const contexts = ['CI', 'Infra'];
+      const ui = { backupDue: false, backupDismissed: false };
+
+      let downloads = [];
+      let downloadShouldThrow = false;
+
+      function downloadBlob(content, type, filename) {
+        if (downloadShouldThrow) throw new Error('blocked by browser');
+        downloads.push({ filename, type, length: content.length });
+      }
+
+      function buildBackupPayload() {
+        return {
+          kind: 'local-tasks-backup',
+          exportedAt: '2026-08-03T09:14:22.031Z',
+          version: SCHEMA_VERSION,
+          tasks: state.tasks,
+          contexts
+        };
+      }
+
+      function runBackup() {
+        const day = currentDate();
+        try {
+          downloadBlob(JSON.stringify(buildBackupPayload(), null, 2), 'application/json', `local-tasks-backup-${day}.json`);
+        } catch (err) {
+          ui.backupDue = true;
+          ui.backupDismissed = false;
+          return false;
+        }
+        // Optimistic: no exception counts as success. See docs/backup.md.
+        state.lastBackupDate = day;
+        ui.backupDue = false;
+        ui.backupDismissed = false;
+        return true;
+      }
+
+      function daysSinceLastBackup() {
+        if (!state.lastBackupDate) return Infinity;
+        const last = new Date(state.lastBackupDate + 'T00:00:00');
+        const cur = new Date(currentDate() + 'T00:00:00');
+        return Math.round((cur - last) / DAY_MS);
+      }
+
+      function isBackupDue() {
+        if (state.backupIntervalDays <= 0) return false;
+        return daysSinceLastBackup() >= state.backupIntervalDays;
+      }
+
+      function runDailyBackup() {
+        if (!isBackupDue()) return false;
+        ui.backupDue = true;
+        return runBackup();
+      }
+
+      function setBackupInterval(days) {
+        state.backupIntervalDays = clampNumber(days, 0, MAX_BACKUP_INTERVAL_DAYS);
+        ui.backupDue = isBackupDue();
+        if (!ui.backupDue) ui.backupDismissed = false;
+      }
+
+      // Mirrors renderBackupBanner(): the banner shows only when due and not dismissed.
+      const bannerVisible = () => ui.backupDue && !ui.backupDismissed;
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + String(row.details).replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify({ state, ui, downloads }, null, 2);
+      }
+
+      try {
+        // ── Default interval (daily) ──────────────────────────
+        assert('a fresh install has no backup date, default interval, and is due',
+          state.lastBackupDate === null && state.backupIntervalDays === 1 && isBackupDue() === true,
+          JSON.stringify(state));
+
+        const ok = runDailyBackup();
+        assert('the first run downloads and marks the day',
+          ok === true &&
+          state.lastBackupDate === '2026-08-03' &&
+          downloads.length === 1 &&
+          downloads[0].filename === 'local-tasks-backup-2026-08-03.json' &&
+          downloads[0].type === 'application/json',
+          JSON.stringify(downloads));
+
+        const second = runDailyBackup();
+        assert('a second run on the same day does nothing',
+          second === false && downloads.length === 1 && isBackupDue() === false && bannerVisible() === false,
+          JSON.stringify({ downloads: downloads.length, due: isBackupDue() }));
+
+        today = '2026-08-04';
+        assert('one day later the daily interval is due again',
+          daysSinceLastBackup() === 1 && isBackupDue() === true,
+          JSON.stringify({ lastBackupDate: state.lastBackupDate, today }));
+
+        runDailyBackup();
+        assert('the next day downloads under its own filename',
+          downloads.length === 2 &&
+          downloads[1].filename === 'local-tasks-backup-2026-08-04.json' &&
+          state.lastBackupDate === '2026-08-04',
+          JSON.stringify(downloads));
+
+        // ── Configurable interval ─────────────────────────────
+        setBackupInterval(3);
+        today = '2026-08-05';
+        assert('a 3-day interval is not due after only 1 day',
+          daysSinceLastBackup() === 1 && isBackupDue() === false,
+          JSON.stringify({ interval: state.backupIntervalDays, days: daysSinceLastBackup() }));
+
+        today = '2026-08-06';
+        assert('a 3-day interval is still not due after 2 days',
+          daysSinceLastBackup() === 2 && isBackupDue() === false,
+          JSON.stringify({ interval: state.backupIntervalDays, days: daysSinceLastBackup() }));
+
+        today = '2026-08-07';
+        assert('a 3-day interval becomes due on the 3rd day',
+          daysSinceLastBackup() === 3 && isBackupDue() === true,
+          JSON.stringify({ interval: state.backupIntervalDays, days: daysSinceLastBackup() }));
+
+        runDailyBackup();
+        assert('the 3-day backup downloads once due',
+          downloads.length === 3 && state.lastBackupDate === '2026-08-07',
+          JSON.stringify(downloads));
+
+        // ── Disabled (0) ───────────────────────────────────────
+        setBackupInterval(0);
+        today = '2026-09-01';
+        assert('an interval of 0 disables automatic backup regardless of elapsed time',
+          isBackupDue() === false && runDailyBackup() === false && downloads.length === 3,
+          JSON.stringify({ due: isBackupDue(), downloads: downloads.length }));
+
+        assert('the interval value itself is clamped to the documented range',
+          (() => { setBackupInterval(-5); const low = state.backupIntervalDays; setBackupInterval(999); const high = state.backupIntervalDays; return low === 0 && high === MAX_BACKUP_INTERVAL_DAYS; })(),
+          JSON.stringify({ max: MAX_BACKUP_INTERVAL_DAYS }));
+
+        setBackupInterval(1);
+
+        // ── Blocked download path ─────────────────────────────
+        today = '2026-09-02';
+        downloadShouldThrow = true;
+        const blocked = runDailyBackup();
+        assert('a blocked download leaves the date untouched and raises the banner',
+          blocked === false &&
+          state.lastBackupDate === '2026-08-07' &&
+          downloads.length === 3 &&
+          ui.backupDue === true && bannerVisible() === true,
+          JSON.stringify({ lastBackupDate: state.lastBackupDate, ui }));
+
+        ui.backupDismissed = true;
+        assert('"Später" hides the banner without marking the day as backed up',
+          bannerVisible() === false && isBackupDue() === true && state.lastBackupDate === '2026-08-07',
+          JSON.stringify({ ui, due: isBackupDue() }));
+
+        // A reload re-evaluates from state, so a skipped backup nags again.
+        ui.backupDismissed = false;
+        ui.backupDue = isBackupDue();
+        assert('after a reload the skipped backup is due again',
+          bannerVisible() === true,
+          JSON.stringify(ui));
+
+        downloadShouldThrow = false;
+        const manual = runBackup();
+        assert('the manual click succeeds and clears the banner',
+          manual === true &&
+          state.lastBackupDate === '2026-09-02' &&
+          downloads.length === 4 &&
+          downloads[3].filename === 'local-tasks-backup-2026-09-02.json' &&
+          bannerVisible() === false,
+          JSON.stringify({ lastBackupDate: state.lastBackupDate, downloads: downloads.length }));
+
+        const payload = buildBackupPayload();
+        assert('the backup payload carries the kind marker, version, tasks and contexts',
+          payload.kind === 'local-tasks-backup' &&
+          payload.version === SCHEMA_VERSION &&
+          Array.isArray(payload.tasks) &&
+          Array.isArray(payload.contexts) &&
+          payload.contexts.length === 2,
+          JSON.stringify(payload));
+
+        assert('formatDateInput produces the same local-date shape the comparison relies on',
+          formatDateInput(new Date(2026, 7, 3)) === '2026-08-03' &&
+          formatDateInput(new Date(2026, 11, 31)) === '2026-12-31',
+          JSON.stringify({ a: formatDateInput(new Date(2026, 7, 3)), b: formatDateInput(new Date(2026, 11, 31)) }));
+      } catch (err) {
+        console.error(err);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

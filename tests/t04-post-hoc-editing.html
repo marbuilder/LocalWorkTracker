@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T04 post-hoc editing</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T04 Post-Hoc Editing</h1>
+  <p>Pins the contract for editing a task after it has left the inbox. <code>changePriority</code>/<code>changeEffort</code> select rather than toggle — clicking the already-active value is a no-op, so a planned or archived task can never be knocked back to <code>null</code>/<code>inbox</code> by an accidental repeat click, unlike the inbox-only <code>setPriority</code>/<code>setEffort</code> toggle. Reclassifying a planned task's effort to "toolarge" still demotes it to the backlog — the upper guardrail applies retroactively. <code>moveToWeek</code> lets a planned task jump to any week directly, counting as a carry-over.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable state</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const results = [];
+      const MAX_TITLE = 120, MAX_NOTES = 2000, MAX_CONTEXT = 40, MAX_EXTERNAL_REF = 60, MAX_CARRY = 99;
+      const PRIORITY_KEYS = ['zero', 'eighty', 'nice'];
+      const EFFORT_KEYS = ['quick', 'small', 'medium', 'toolarge'];
+      const STATUS_KEYS = ['inbox', 'backlog', 'planned', 'done', 'dropped', 'escalated'];
+      const TERMINAL = ['done', 'dropped', 'escalated'];
+      const isTerminal = key => TERMINAL.includes(key);
+      const WEEK = '2026-W32';
+
+      let clock = 1000;
+      const now = () => (clock += 10);
+      let lastToast = null;
+      const showToast = (message) => { lastToast = message; };
+
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+      function parseIsoWeekKey(key) {
+        const m = /^(\d{4})-W(\d{2})$/.exec(String(key || ''));
+        if (!m) return null;
+        const week = Number(m[2]);
+        if (week < 1 || week > 53) return null;
+        return { year: Number(m[1]), week };
+      }
+      // Minimal week-offset stub sufficient for this fixture's single-year range.
+      function weekKeyOffset(key, delta) {
+        const parsed = parseIsoWeekKey(key);
+        if (!parsed) return key;
+        return `${parsed.year}-W${String(parsed.week + delta).padStart(2, '0')}`;
+      }
+      function normalizeTask(t) {
+        const priority = PRIORITY_KEYS.includes(t.priority) ? t.priority : null;
+        const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
+        let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
+        let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
+        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        if (status === 'planned' && !plannedWeek) status = 'backlog';
+        if (status !== 'planned') plannedWeek = null;
+        const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
+        const updatedAt = Number.isFinite(Number(t.updatedAt)) ? Number(t.updatedAt) : createdAt;
+        const doneAt = Number.isFinite(Number(t.doneAt)) && Number(t.doneAt) > 0 ? Number(t.doneAt) : null;
+        return {
+          id: typeof t.id === 'string' && t.id ? t.id : 'generated-id',
+          title: sanitizeText(t.title, MAX_TITLE),
+          notes: sanitizeText(t.notes || '', MAX_NOTES),
+          context: sanitizeText(t.context || '', MAX_CONTEXT),
+          priority, effort, status, plannedWeek,
+          todayFlag: status === 'planned' ? Boolean(t.todayFlag) : false,
+          carryCount: clampNumber(t.carryCount || 0, 0, MAX_CARRY),
+          externalRef: sanitizeText(t.externalRef || '', MAX_EXTERNAL_REF),
+          createdAt, updatedAt,
+          doneAt: isTerminal(status) ? (doneAt || updatedAt || createdAt) : null
+        };
+      }
+
+      const tasks = [];
+      const findTask = id => tasks.find(t => t.id === id) || null;
+      let idCounter = 0;
+
+      function makeTask(fields) {
+        const ts = now();
+        const task = normalizeTask({
+          id: 'task-' + (++idCounter), title: 'Aufgabe ' + idCounter,
+          createdAt: ts, updatedAt: ts, ...fields
+        });
+        tasks.push(task);
+        return task;
+      }
+
+      // ── Reducers under test, copied from index.html ──────────
+      function touch(task) { task.updatedAt = now(); }
+
+      function changePriority(id, priority) {
+        const task = findTask(id);
+        if (!task || !PRIORITY_KEYS.includes(priority) || task.priority === priority) return;
+        task.priority = priority;
+        touch(task);
+      }
+
+      function changeEffort(id, effort) {
+        const task = findTask(id);
+        if (!task || !EFFORT_KEYS.includes(effort) || task.effort === effort) return;
+        task.effort = effort;
+        if (task.status === 'planned' && effort === 'toolarge') {
+          task.status = 'backlog';
+          task.plannedWeek = null;
+          task.todayFlag = false;
+          showToast('Als „Größer — Story" kann die Aufgabe nicht geplant bleiben — zurück ins Backlog.');
+        }
+        touch(task);
+      }
+
+      function moveToWeek(id, weekKey) {
+        const task = findTask(id);
+        if (!task || task.status !== 'planned') return;
+        if (!parseIsoWeekKey(weekKey) || weekKey === task.plannedWeek) return;
+        task.plannedWeek = weekKey;
+        task.carryCount = clampNumber(task.carryCount + 1, 0, MAX_CARRY);
+        task.todayFlag = false;
+        touch(task);
+      }
+
+      function carryOverTask(id, delta) {
+        const task = findTask(id);
+        if (!task || task.status !== 'planned') return;
+        moveToWeek(id, weekKeyOffset(task.plannedWeek, delta || 1));
+      }
+
+      function editTaskTitle(id, title) {
+        const task = findTask(id);
+        if (!task) return null;
+        const clean = sanitizeText(title, MAX_TITLE);
+        if (!clean) return null;
+        task.title = clean;
+        touch(task);
+        return clean;
+      }
+
+      function editExternalRef(id, value) {
+        const task = findTask(id);
+        if (!task) return;
+        task.externalRef = sanitizeText(value, MAX_EXTERNAL_REF);
+        touch(task);
+      }
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + String(row.details).replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify(tasks, null, 2);
+      }
+
+      try {
+        // ── changePriority / changeEffort select, they don't toggle ──
+        const backlogTask = makeTask({ priority: 'eighty', effort: 'small', status: 'backlog' });
+        changePriority(backlogTask.id, 'eighty'); // clicking the already-active chip
+        assert('re-selecting the active priority is a no-op, not a clear',
+          backlogTask.priority === 'eighty' && backlogTask.status === 'backlog',
+          JSON.stringify(backlogTask));
+
+        changePriority(backlogTask.id, 'zero');
+        assert('selecting a different priority updates it in place without touching status',
+          backlogTask.priority === 'zero' && backlogTask.status === 'backlog',
+          JSON.stringify(backlogTask));
+
+        changeEffort(backlogTask.id, 'small'); // already active
+        assert('re-selecting the active effort is a no-op',
+          backlogTask.effort === 'small' && backlogTask.status === 'backlog',
+          JSON.stringify(backlogTask));
+
+        changeEffort(backlogTask.id, 'medium');
+        assert('selecting a different effort updates it without forcing inbox',
+          backlogTask.effort === 'medium' && backlogTask.status === 'backlog',
+          JSON.stringify(backlogTask));
+
+        // ── Guardrail still enforced retroactively on planned tasks ──
+        const planned = makeTask({ priority: 'nice', effort: 'small', status: 'planned', plannedWeek: WEEK, todayFlag: true });
+        lastToast = null;
+        changeEffort(planned.id, 'toolarge');
+        assert('reclassifying a planned task as oversized demotes it to the backlog',
+          planned.status === 'backlog' && planned.plannedWeek === null && planned.todayFlag === false && planned.effort === 'toolarge',
+          JSON.stringify(planned));
+        assert('the demotion explains itself with a toast',
+          typeof lastToast === 'string' && lastToast.length > 0,
+          String(lastToast));
+
+        // A task that is merely backlog (not planned) is not force-planned or
+        // otherwise punished for having effort toolarge — nothing to demote from.
+        const alreadyBacklog = makeTask({ priority: 'eighty', effort: 'small', status: 'backlog' });
+        changeEffort(alreadyBacklog.id, 'toolarge');
+        assert('an already-backlog task changing to oversized just updates the field',
+          alreadyBacklog.status === 'backlog' && alreadyBacklog.effort === 'toolarge',
+          JSON.stringify(alreadyBacklog));
+
+        // ── Editing terminal (archived) tasks doesn't resurrect them ──
+        const done = makeTask({ priority: 'nice', effort: 'small', status: 'done', doneAt: now() });
+        const doneAtBefore = done.doneAt;
+        changePriority(done.id, 'zero');
+        changeEffort(done.id, 'toolarge');
+        assert('editing a done task changes only the field, status and doneAt are untouched',
+          done.status === 'done' && done.priority === 'zero' && done.effort === 'toolarge' && done.doneAt === doneAtBefore,
+          JSON.stringify(done));
+
+        const escalated = makeTask({ priority: 'zero', effort: 'toolarge', status: 'escalated', externalRef: 'PROJ-1', doneAt: now() });
+        editExternalRef(escalated.id, '  proj-9999  ');
+        assert('the story key can be corrected after escalation',
+          escalated.externalRef === 'proj-9999' && escalated.status === 'escalated',
+          JSON.stringify(escalated));
+
+        // ── moveToWeek: arbitrary jump vs. the +1 carry-over ──
+        const week32 = makeTask({ priority: 'eighty', effort: 'small', status: 'planned', plannedWeek: '2026-W32', todayFlag: true });
+        moveToWeek(week32.id, '2026-W36');
+        assert('moveToWeek jumps straight to the chosen week and counts as one carry-over',
+          week32.plannedWeek === '2026-W36' && week32.carryCount === 1 && week32.todayFlag === false,
+          JSON.stringify(week32));
+
+        moveToWeek(week32.id, '2026-W36'); // same week again
+        assert('choosing the currently-planned week again is a no-op',
+          week32.plannedWeek === '2026-W36' && week32.carryCount === 1,
+          JSON.stringify(week32));
+
+        moveToWeek(week32.id, 'not-a-week');
+        assert('an unparseable week is rejected',
+          week32.plannedWeek === '2026-W36' && week32.carryCount === 1,
+          JSON.stringify(week32));
+
+        const backlogNoWeek = makeTask({ priority: 'nice', effort: 'small', status: 'backlog' });
+        moveToWeek(backlogNoWeek.id, '2026-W40');
+        assert('moveToWeek refuses a task that is not planned',
+          backlogNoWeek.status === 'backlog' && backlogNoWeek.plannedWeek === null,
+          JSON.stringify(backlogNoWeek));
+
+        // carryOverTask still behaves exactly as before, now built on moveToWeek.
+        const carryTask = makeTask({ priority: 'zero', effort: 'small', status: 'planned', plannedWeek: '2026-W10', todayFlag: true });
+        carryOverTask(carryTask.id, 1);
+        assert('carryOverTask(+1) is unchanged after the moveToWeek refactor',
+          carryTask.plannedWeek === '2026-W11' && carryTask.carryCount === 1 && carryTask.todayFlag === false,
+          JSON.stringify(carryTask));
+
+        // ── Title/notes/context edits work regardless of status ──
+        const titleResult = editTaskTitle(planned.id, '  Neuer Titel  ');
+        assert('title can be edited on a demoted (now backlog) task',
+          titleResult === 'Neuer Titel' && planned.title === 'Neuer Titel',
+          JSON.stringify({ title: planned.title }));
+
+        assert('an empty title edit is rejected',
+          editTaskTitle(planned.id, '   ') === null && planned.title === 'Neuer Titel',
+          JSON.stringify({ title: planned.title }));
+      } catch (err) {
+        console.error(err);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
