@@ -96,10 +96,10 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
   <script> boot: migration + initial theme </script>
 
   <div class="container">
-    <header class="app-head">                 -- title, #dataMenu, #themeToggleBtn (AppShell-owned)
+    <header class="app-head">                 -- title, #dataMenu, #themeToggleBtn, #shortcutHelp (Zeit-only keyboard-shortcut popover, right of the theme toggle) (AppShell-owned)
     <div id="task-backupBanner" hidden>        -- rendered by TaskModule, placed in the header so it's visible from either tab
     <div class="current-row">                  -- sticky bar: #currentTimer + #pomodoroBar (TimeModule-owned, unchanged markup/JS from LocalTimetracker)
-    <nav id="mainTabbar">                      -- #shortcutHelp (Zeit-only keyboard-shortcut popover, left of the tabs) + 2 buttons, data-main-tab="time"|"tasks" (AppShell-owned)
+    <nav id="mainTabbar">                      -- 2 buttons, data-main-tab="time"|"tasks" (AppShell-owned)
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
       <section id="tabPanelTasks" hidden>      -- #task-tabbar + #task-viewRoot (TaskModule's own inner router, unchanged)
@@ -155,7 +155,7 @@ If you're chasing a theme bug, it's in the boot script or AppShell — not in Ti
 
 `AppShell` holds two DOM references (`#tabPanelTime`, `#tabPanelTasks`) and a list of `#mainTabbar button[data-main-tab]`. `switchTab(name)` toggles `hidden` on the panels and `.active`/`aria-current` on the buttons, and persists the choice to `local-work-tracker-v1-ui-active-tab` so a reload reopens the same tab. Both panels' content is always in the DOM (just hidden) — there's no re-render-on-switch, so switching tabs is instant and doesn't disturb in-progress form state in the other tab.
 
-`switchTab` also toggles `hidden` on `#shortcutHelp` (`name !== 'time'`) — it lives in `#mainTabbar` (same row/height as the tab buttons, left of them) rather than inside `#tabPanelTime`, because it's meant to sit visually next to the tabs, but its keyboard shortcuts (Ctrl+Enter, Esc, Alt+arrows, Alt+T) are Zeit-only. Any element given a CSS rule that sets `display` unconditionally needs a matching `[hidden] { display: none; }` override (see `.tab-panel[hidden]`, `.shortcut-help[hidden]`) — otherwise the author rule's equal-or-higher specificity beats the UA default and the `hidden` attribute does nothing.
+`switchTab` also toggles `hidden` on `#shortcutHelp` (`name !== 'time'`) — it lives in the shared `.app-head-actions` (right of `#themeToggleBtn`) rather than inside `#tabPanelTime`, because it's meant to sit in the header row, but its keyboard shortcuts (Ctrl+Enter, Esc, Alt+arrows, Alt+T) are Zeit-only. Any element given a CSS rule that sets `display` unconditionally needs a matching `[hidden] { display: none; }` override (see `.tab-panel[hidden]`, `.shortcut-help[hidden]`) — otherwise the author rule's equal-or-higher specificity beats the UA default and the `hidden` attribute does nothing.
 
 `window.LWT.shell.switchTab('time')` is how the Aufgaben ▶ button jumps to the Zeit tab after starting a timer (`TaskModule`, inside `renderPlannedCard`, guarded with `if (window.LWT.shell)`).
 
