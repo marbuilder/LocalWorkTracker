@@ -180,9 +180,9 @@
     .shortcut-help {
       display: inline-flex; align-items: center; gap: 6px;
       font-size: 13px; color: var(--muted);
-      align-self: flex-end;
       position: relative;
     }
+    .shortcut-help[hidden] { display: none; }
     .shortcut-help summary { cursor: pointer; list-style: none; padding: 4px 8px; border-radius: 8px; }
     .shortcut-help summary::-webkit-details-marker { display: none; }
     .shortcut-help[open] summary { background: var(--btn-bg); }
@@ -193,7 +193,7 @@
       font-size: 12px; color: var(--text);
     }
     .shortcut-help .shortcut-list {
-      position: absolute; top: 100%; right: 0; margin-top: 6px;
+      position: absolute; top: 100%; left: 0; margin-top: 6px;
       padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
       border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
       display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
@@ -809,7 +809,10 @@
     /* ══════════════════════════════════════════════════════════
        App shell (LocalWorkTracker)
        ══════════════════════════════════════════════════════════ */
-    #mainTabbar { margin-top: 4px; }
+    /* Unlike TaskModule's inner .tabbar (Posteingang/Woche/…), #mainTabbar
+       never needs to horizontally scroll — override so the shortcut-help
+       dropdown isn't clipped by .tabbar's overflow-x: auto. */
+    #mainTabbar { margin-top: 4px; overflow: visible; }
     #mainTabbar button {
       width: auto; min-height: 40px; padding: 8px 18px; font-size: 15px; font-weight: 600;
     }
@@ -821,6 +824,7 @@
     }
     @media (max-width: 700px) {
       #mainTabbar { flex-direction: column; }
+      .shortcut-help { align-self: flex-start; }
     }
 
   </style>
@@ -927,23 +931,22 @@
     </div>
 
     <nav class="tabbar" id="mainTabbar" aria-label="Hauptbereiche">
+      <details class="shortcut-help" id="shortcutHelp">
+        <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel">⌨️</summary>
+        <div class="shortcut-list">
+          <kbd>Ctrl/⌘ + Enter</kbd><span>Timer starten</span>
+          <kbd>Esc</kbd><span>Timer stoppen (mit Rückfrage)</span>
+          <kbd>Alt + ←</kbd><span>Vortag</span>
+          <kbd>Alt + →</kbd><span>Nächster Tag</span>
+          <kbd>Alt + T</kbd><span>Heute</span>
+        </div>
+      </details>
       <button type="button" data-main-tab="time">⏱ Zeit</button>
       <button type="button" data-main-tab="tasks">✅ Aufgaben</button>
     </nav>
 
     <main id="mainViewRoot">
       <section id="tabPanelTime" class="tab-panel">
-          <details class="shortcut-help">
-            <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel">⌨️</summary>
-            <div class="shortcut-list">
-              <kbd>Ctrl/⌘ + Enter</kbd><span>Timer starten</span>
-              <kbd>Esc</kbd><span>Timer stoppen (mit Rückfrage)</span>
-              <kbd>Alt + ←</kbd><span>Vortag</span>
-              <kbd>Alt + →</kbd><span>Nächster Tag</span>
-              <kbd>Alt + T</kbd><span>Heute</span>
-            </div>
-          </details>
-
       <div class="stats" id="stats"></div>
 
     <div class="grid">
@@ -4909,6 +4912,7 @@
         time: qs('tabPanelTime'),
         tasks: qs('tabPanelTasks')
       };
+      var shortcutHelp = qs('shortcutHelp');
       function switchTab(name) {
         if (!panels[name]) return;
         Object.keys(panels).forEach(function (key) {
@@ -4919,6 +4923,10 @@
           btn.classList.toggle('active', active);
           btn.setAttribute('aria-current', active ? 'page' : 'false');
         });
+        // Zeit-specific shortcuts (Ctrl+Enter, Esc, Alt+arrows, Alt+T) only
+        // apply on the Zeit tab, even though the icon now lives in the
+        // shared #mainTabbar row alongside the tab buttons.
+        if (shortcutHelp) shortcutHelp.hidden = name !== 'time';
         try { localStorage.setItem('local-work-tracker-v1-ui-active-tab', name); } catch (err) { /* ignore */ }
       }
       tabButtons.forEach(function (btn) {
