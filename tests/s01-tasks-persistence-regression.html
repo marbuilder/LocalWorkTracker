@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S01 persistence regression</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>S01 Persistence Regression</h1>
+  <p>This page exercises the browser-storage normalization contract without dependencies. It writes deterministic malformed <code>localStorage</code> fixtures, runs them through the same normalization the app uses, and reports visible pass/fail output so broken saved state is easy to distinguish from valid persisted state.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable localStorage</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 's01-regression-state';
+      const CONTEXTS_KEY = STORAGE_KEY + '-contexts';
+      const SCHEMA_VERSION = 1;
+      const MAX_TITLE = 120, MAX_NOTES = 2000, MAX_CONTEXT = 40, MAX_EXTERNAL_REF = 60, MAX_CARRY = 99;
+      const DEFAULT_BACKUP_INTERVAL_DAYS = 1, MAX_BACKUP_INTERVAL_DAYS = 30;
+      const results = [];
+
+      const PRIORITY_KEYS = ['zero', 'eighty', 'nice'];
+      const EFFORT_KEYS = ['quick', 'small', 'medium', 'toolarge'];
+      const STATUS_KEYS = ['inbox', 'backlog', 'planned', 'done', 'dropped', 'escalated'];
+      const TERMINAL = ['done', 'dropped', 'escalated'];
+      const isTerminal = key => TERMINAL.includes(key);
+
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+
+      function parseIsoWeekKey(key) {
+        const m = /^(\d{4})-W(\d{2})$/.exec(String(key || ''));
+        if (!m) return null;
+        const week = Number(m[2]);
+        if (week < 1 || week > 53) return null;
+        return { year: Number(m[1]), week };
+      }
+
+      function isValidTask(t) {
+        return t && typeof t === 'object' && typeof t.title === 'string' && t.title.trim() !== '';
+      }
+
+      function normalizeTask(t) {
+        const priority = PRIORITY_KEYS.includes(t.priority) ? t.priority : null;
+        const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
+        let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
+        let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
+
+        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        if (status === 'planned' && !plannedWeek) status = 'backlog';
+        if (status !== 'planned') plannedWeek = null;
+
+        const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
+        const updatedAt = Number.isFinite(Number(t.updatedAt)) ? Number(t.updatedAt) : createdAt;
+        const doneAt = Number.isFinite(Number(t.doneAt)) && Number(t.doneAt) > 0 ? Number(t.doneAt) : null;
+
+        return {
+          id: typeof t.id === 'string' && t.id ? t.id : 'generated-id',
+          title: sanitizeText(t.title, MAX_TITLE),
+          notes: sanitizeText(t.notes || '', MAX_NOTES),
+          context: sanitizeText(t.context || '', MAX_CONTEXT),
+          priority,
+          effort,
+          status,
+          plannedWeek,
+          todayFlag: status === 'planned' ? Boolean(t.todayFlag) : false,
+          carryCount: clampNumber(t.carryCount || 0, 0, MAX_CARRY),
+          externalRef: sanitizeText(t.externalRef || '', MAX_EXTERNAL_REF),
+          createdAt,
+          updatedAt,
+          doneAt: isTerminal(status) ? (doneAt || updatedAt || createdAt) : null
+        };
+      }
+
+      function normalizeContexts(list) {
+        const cleaned = (Array.isArray(list) ? list : [])
+          .map(c => sanitizeText(c, MAX_CONTEXT))
+          .filter(Boolean);
+        return [...new Set(cleaned)].sort((a, b) => a.localeCompare(b, 'de'));
+      }
+
+      function normalizePersistedState(rawState, rawContexts) {
+        const next = { version: SCHEMA_VERSION, tasks: [], lastBackupDate: null, contexts: [], backupIntervalDays: DEFAULT_BACKUP_INTERVAL_DAYS };
+        try {
+          const parsed = rawState ? JSON.parse(rawState) : null;
+          if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.tasks)) {
+              next.tasks = parsed.tasks.filter(isValidTask).map(normalizeTask);
+            }
+            if (typeof parsed.lastBackupDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(parsed.lastBackupDate)) {
+              next.lastBackupDate = parsed.lastBackupDate;
+            }
+            // Older saves predate this field; a missing or non-numeric value
+            // falls back to the default (daily), not to 0 (disabled).
+            next.backupIntervalDays = Number.isFinite(Number(parsed.backupIntervalDays))
+              ? clampNumber(parsed.backupIntervalDays, 0, MAX_BACKUP_INTERVAL_DAYS)
+              : DEFAULT_BACKUP_INTERVAL_DAYS;
+          }
+        } catch (err) {
+          console.warn('state parse failed', err);
+        }
+        try {
+          next.contexts = normalizeContexts(rawContexts ? JSON.parse(rawContexts) : []);
+        } catch (err) {
+          console.warn('contexts parse failed', err);
+          next.contexts = [];
+        }
+        return next;
+      }
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + String(row.details).replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify({
+          storageKey: STORAGE_KEY,
+          storedState: localStorage.getItem(STORAGE_KEY),
+          storedContexts: localStorage.getItem(CONTEXTS_KEY)
+        }, null, 2);
+      }
+
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(CONTEXTS_KEY);
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          version: 1,
+          lastBackupDate: '2026-08-01',
+          tasks: [
+            // sane record with dirty text and an out-of-range carry count
+            {
+              id: 'a', title: '  Renovate-PRs\u0000 aufräumen  ', notes: ' Note\u0007 ', context: '  Infra  ',
+              priority: 'eighty', effort: 'small', status: 'planned', plannedWeek: '2026-W32',
+              todayFlag: 1, carryCount: '250', externalRef: '', createdAt: '1000', updatedAt: 2000, doneAt: null
+            },
+            // unknown enum values must fall back, which forces the status back to inbox
+            {
+              id: 'b', title: 'Unbekannte Enums', priority: 'urgent', effort: 'huge', status: 'wip',
+              plannedWeek: '2026-W32', carryCount: 0, createdAt: 3000, updatedAt: 3000
+            },
+            // planned but with an unparseable week -> backlog
+            {
+              id: 'c', title: 'Kaputte Woche', priority: 'zero', effort: 'medium', status: 'planned',
+              plannedWeek: '2026-W99', todayFlag: true, createdAt: 4000, updatedAt: 4000
+            },
+            // terminal without doneAt -> filled from updatedAt
+            {
+              id: 'd', title: 'Eskaliert ohne Datum', priority: 'nice', effort: 'toolarge', status: 'escalated',
+              externalRef: '  PROJ-1234  ', createdAt: 5000, updatedAt: 6000, doneAt: null
+            },
+            // malformed records that must be dropped entirely
+            { id: 'e', title: '   ' },
+            { id: 'f' },
+            null,
+            'not an object'
+          ]
+        }));
+        localStorage.setItem(CONTEXTS_KEY, JSON.stringify(['  Infra  ', '', null, 'CI', 'Infra', '\u0000']));
+
+        const n = normalizePersistedState(localStorage.getItem(STORAGE_KEY), localStorage.getItem(CONTEXTS_KEY));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: n.version, tasks: n.tasks, lastBackupDate: n.lastBackupDate, backupIntervalDays: n.backupIntervalDays }));
+        localStorage.setItem(CONTEXTS_KEY, JSON.stringify(n.contexts));
+
+        const byId = id => n.tasks.find(t => t.id === id);
+
+        assert('malformed records are dropped',
+          n.tasks.length === 4 && !byId('e') && !byId('f'),
+          JSON.stringify(n.tasks.map(t => t.id)));
+
+        assert('text fields are sanitized and carryCount is clamped',
+          byId('a').title === 'Renovate-PRs  aufräumen' &&
+          byId('a').notes === 'Note' &&
+          byId('a').context === 'Infra' &&
+          byId('a').carryCount === MAX_CARRY &&
+          byId('a').createdAt === 1000 &&
+          byId('a').todayFlag === true,
+          JSON.stringify(byId('a')));
+
+        assert('unknown enum values fall back and force the status to inbox',
+          byId('b').priority === null && byId('b').effort === null &&
+          byId('b').status === 'inbox' && byId('b').plannedWeek === null && byId('b').todayFlag === false,
+          JSON.stringify(byId('b')));
+
+        assert('planned without a parseable week falls back to backlog',
+          byId('c').status === 'backlog' && byId('c').plannedWeek === null && byId('c').todayFlag === false,
+          JSON.stringify(byId('c')));
+
+        assert('terminal tasks keep externalRef and get a doneAt',
+          byId('d').status === 'escalated' && byId('d').externalRef === 'PROJ-1234' && byId('d').doneAt === 6000,
+          JSON.stringify(byId('d')));
+
+        assert('non-terminal tasks have doneAt null',
+          byId('a').doneAt === null && byId('b').doneAt === null && byId('c').doneAt === null,
+          JSON.stringify(n.tasks.map(t => ({ id: t.id, doneAt: t.doneAt }))));
+
+        assert('context tags are trimmed, deduplicated and sorted',
+          n.contexts.length === 2 && n.contexts[0] === 'CI' && n.contexts[1] === 'Infra',
+          JSON.stringify(n.contexts));
+
+        assert('lastBackupDate survives only in the expected format',
+          n.lastBackupDate === '2026-08-01' &&
+          normalizePersistedState(JSON.stringify({ tasks: [], lastBackupDate: '01.08.2026' }), '[]').lastBackupDate === null,
+          JSON.stringify({ kept: n.lastBackupDate }));
+
+        const broken = normalizePersistedState('{not json', 'also not json');
+        assert('unparseable storage yields empty defaults instead of throwing',
+          broken.tasks.length === 0 && broken.contexts.length === 0 && broken.lastBackupDate === null &&
+          broken.backupIntervalDays === DEFAULT_BACKUP_INTERVAL_DAYS,
+          JSON.stringify(broken));
+
+        assert('a save from before backupIntervalDays existed defaults to daily',
+          n.backupIntervalDays === DEFAULT_BACKUP_INTERVAL_DAYS,
+          JSON.stringify({ backupIntervalDays: n.backupIntervalDays }));
+
+        assert('an out-of-range backupIntervalDays is clamped, not defaulted',
+          normalizePersistedState(JSON.stringify({ tasks: [], backupIntervalDays: -5 }), '[]').backupIntervalDays === 0 &&
+          normalizePersistedState(JSON.stringify({ tasks: [], backupIntervalDays: 999 }), '[]').backupIntervalDays === MAX_BACKUP_INTERVAL_DAYS &&
+          normalizePersistedState(JSON.stringify({ tasks: [], backupIntervalDays: 'nope' }), '[]').backupIntervalDays === DEFAULT_BACKUP_INTERVAL_DAYS,
+          JSON.stringify({ max: MAX_BACKUP_INTERVAL_DAYS }));
+
+        assert('persisted payload stays inspectable and deterministic',
+          localStorage.getItem(STORAGE_KEY).includes('Renovate-PRs') &&
+          localStorage.getItem(CONTEXTS_KEY).includes('Infra'),
+          JSON.stringify({ state: localStorage.getItem(STORAGE_KEY).slice(0, 120) }));
+      } catch (err) {
+        console.error(err);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

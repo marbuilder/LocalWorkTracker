@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T03 — Timer wechseln & Zukunfts-Endzeit</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; background: #f4f6f8; color: #0f172a; }
+    h1 { margin: 0 0 8px; }
+    .summary { margin: 12px 0 16px; padding: 12px 14px; border-radius: 8px; background: #fff; border: 1px solid #d7dce2; }
+    .pass { color: #0a7a3d; font-weight: 600; }
+    .fail { color: #b00020; font-weight: 600; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; background: #fff; }
+    td, th { border: 1px solid #d7dce2; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; font-size: 13px; }
+    pre { background: #f4f6f8; padding: 8px 10px; border-radius: 6px; margin: 0; max-height: 240px; overflow: auto; font-size: 12px; }
+    iframe { width: 1200px; max-width: 100%; height: 700px; border: 1px solid #d7dce2; border-radius: 8px; margin-top: 16px; background: #fff; }
+    button { padding: 6px 12px; border-radius: 6px; border: 1px solid #c0c4cc; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>T03 — Timer wechseln & Zukunfts-Endzeit</h1>
+  <p>Bei laufendem Timer + Start-Klick erscheint der askConfirm-Dialog. Endzeit in der Zukunft (Tag heute, Uhrzeit > now) wird beim Stop akzeptiert.</p>
+
+  <div class="summary" id="status">Running…</div>
+  <button id="rerunBtn" type="button">Neu ausführen</button>
+
+  <table>
+    <thead><tr><th style="width: 40%">Check</th><th style="width: 12%">Ergebnis</th><th>Details</th></tr></thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <h2>App im Iframe</h2>
+  <iframe id="app" title="App"></iframe>
+
+  <h2>Gefangene Exceptions</h2>
+  <pre id="errors">(keine)</pre>
+
+  <script>
+    (() => {
+      'use strict';
+      const STORAGE_PREFIX = 'local-work-tracker-v1-time-entries';
+      let results = [], caughtErrors = [];
+      const $ = id => document.getElementById(id);
+      function record(name, pass, details) { results.push({ name, pass: !!pass, details: String(details ?? '') }); }
+      function renderResults() {
+        const tbody = $('results'); tbody.innerHTML = '';
+        results.forEach(r => {
+          const tr = document.createElement('tr');
+          const safe = r.details.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+          tr.innerHTML = '<td>'+r.name+'</td><td class="'+(r.pass?'pass':'fail')+'">'+(r.pass?'PASS':'FAIL')+'</td><td><pre>'+safe+'</pre></td>';
+          tbody.appendChild(tr);
+        });
+        const all = results.length && results.every(r => r.pass);
+        const noResults = results.length === 0;
+        $('status').innerHTML = noResults ? '<span>Running…</span>' : (all ? '<span class="pass">Alle Checks bestanden.</span>' : '<span class="fail">Mindestens ein Check fehlgeschlagen.</span>');
+        $('errors').textContent = caughtErrors.length ? caughtErrors.map(e => e.message + '\n' + (e.stack || '')).join('\n---\n') : '(keine)';
+      }
+      function waitRaf(n=2) { return new Promise(r => { let i=0; const t=()=>(++i>=n?r():requestAnimationFrame(t)); requestAnimationFrame(t); }); }
+      function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+      function dispatchInput(el, val) { el.value = val; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+      function clearKeys() {
+        const rm = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k === STORAGE_PREFIX || k.startsWith(STORAGE_PREFIX + '-'))) rm.push(k);
+        }
+        rm.forEach(k => localStorage.removeItem(k));
+      }
+      function hookErrors(win) {
+        win.addEventListener('error', e => caughtErrors.push({ message: 'error: ' + e.message, stack: e.error?.stack || `${e.filename}:${e.lineno}:${e.colno}` }));
+        win.addEventListener('unhandledrejection', e => { const r = e.reason; caughtErrors.push({ message: 'rejection: ' + (r?.message || String(r)), stack: r?.stack || '' }); });
+      }
+      function load(iframe) {
+        return new Promise((res, rej) => {
+          iframe.addEventListener('load', () => res(), { once: true });
+          iframe.src = '../index.html?t=' + Date.now();
+          setTimeout(() => rej(new Error('load timeout')), 5000);
+        });
+      }
+      function pad2(n) { return String(n).padStart(2, '0'); }
+
+      async function run() {
+        results = []; caughtErrors = []; renderResults();
+        clearKeys();
+        const iframe = $('app');
+        try { await load(iframe); } catch (e) { record('iframe laedt', false, e.message); renderResults(); return; }
+        const win = iframe.contentWindow, doc = iframe.contentDocument;
+        hookErrors(win); await waitRaf(3);
+
+        const ticketNumber = doc.getElementById('ticketNumber');
+        const startBtn = doc.getElementById('startBtn');
+        const stopBtn = doc.getElementById('stopBtn');
+        const confirmDialog = doc.getElementById('confirmDialog');
+        const timerEndTime = doc.getElementById('timerStartTime');
+
+        // Start Timer A
+        dispatchInput(ticketNumber, 'A');
+        startBtn.click();
+        await waitRaf(3);
+        record('Timer A gestartet', JSON.parse(win.localStorage.getItem('local-work-tracker-v1-time-entries'))?.activeTimer?.ticket === 'A', win.localStorage.getItem('local-work-tracker-v1-time-entries'));
+
+        // Try to start Timer B → askConfirm should appear
+        dispatchInput(ticketNumber, 'B');
+        startBtn.click();
+        await waitRaf(3);
+        record('askConfirm-Dialog ist offen', confirmDialog.open === true, 'open=' + confirmDialog.open);
+        const dialogTitle = confirmDialog.querySelector('#confirmDialogTitle')?.textContent || '';
+        record('Dialog-Titel enthält "Timer läuft bereits"', /Timer/.test(dialogTitle), dialogTitle);
+
+        // Click "Abbrechen" -> Timer A should still be running
+        const cancelBtn = Array.from(confirmDialog.querySelectorAll('#confirmDialogActions button')).find(b => /Abbrechen/.test(b.textContent));
+        cancelBtn.click();
+        await waitRaf(3);
+        record('Abbrechen → Timer A laeuft weiter', JSON.parse(win.localStorage.getItem('local-work-tracker-v1-time-entries'))?.activeTimer?.ticket === 'A', 'still A');
+
+        // Now confirm replace: start B with confirm
+        startBtn.click();
+        await waitRaf(3);
+        const confirmBtn = Array.from(confirmDialog.querySelectorAll('#confirmDialogActions button')).find(b => /Wechseln/.test(b.textContent));
+        record('Wechseln-Button im Dialog vorhanden', !!confirmBtn, confirmBtn ? confirmBtn.textContent : 'fehlt');
+        confirmBtn.click();
+        await waitRaf(3);
+
+        const stateAfter = JSON.parse(win.localStorage.getItem('local-work-tracker-v1-time-entries'));
+        record('nach Wechseln: 1 Eintrag (vom Timer A)', Array.isArray(stateAfter?.entries) && stateAfter.entries.length === 1 && stateAfter.entries[0].ticket === 'A', JSON.stringify(stateAfter?.entries));
+        record('nach Wechseln: activeTimer = B', stateAfter?.activeTimer?.ticket === 'B', JSON.stringify(stateAfter?.activeTimer));
+
+        // Future end time: set timerEndTime to 23:59 (assumed future for most run-times) and Stop
+        // Use now + 30 minutes as end-time (likely still future in run).
+        const future = new Date(Date.now() + 30 * 60 * 1000);
+        const futureValue = `${pad2(future.getHours())}:${pad2(future.getMinutes())}`;
+        dispatchInput(timerEndTime, futureValue);
+        stopBtn.click();
+        await waitRaf(3);
+
+        const stateAfterStop = JSON.parse(win.localStorage.getItem('local-work-tracker-v1-time-entries'));
+        record('Stop mit Zukunfts-Endzeit angenommen', Array.isArray(stateAfterStop?.entries) && stateAfterStop.entries.length === 2 && stateAfterStop.entries.some(e => e.ticket === 'B'), JSON.stringify(stateAfterStop?.entries.map(e => ({t: e.ticket, end: e.endTs}))));
+        const bEntry = stateAfterStop.entries.find(e => e.ticket === 'B');
+        record('Eintrag B hat endTs in der Zukunft', bEntry && bEntry.endTs > Date.now(), 'endTs - now = ' + (bEntry ? (bEntry.endTs - Date.now()) : 'n/a'));
+
+        record('keine ungefangenen Exceptions', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
+        renderResults();
+      }
+
+      $('rerunBtn').addEventListener('click', run);
+      run().catch(err => { caughtErrors.push({ message: 'runner: '+err.message, stack: err.stack }); renderResults(); });
+    })();
+  </script>
+</body>
+</html>

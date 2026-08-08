@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LocalWorkTracker — test pages</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.5; max-width: 820px; }
+    code { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 10px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+    a { color: #2456b8; }
+    .note { background: #f7f9fc; border-left: 3px solid #2456b8; padding: 12px 16px; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <h1>LocalWorkTracker — test pages</h1>
+  <p>Each page runs its assertions on load and renders a pass/fail table. Open one and read the table, or run all of them headless with <code>npm test</code>.</p>
+
+  <div class="note">
+    Serve the repository rather than opening <code>file://</code> URLs — some pages need a real origin for <code>localStorage</code>:
+    <br><code>npx http-server . -p 8765 -c-1</code> then browse to <code>http://localhost:8765/tests/</code>.
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Page</th><th>Covers</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><a href="s01-tasks-persistence-regression.html">s01-tasks-persistence-regression.html</a></td><td>Tasks storage normalization contract</td></tr>
+      <tr><td><a href="s02-time-persistence-regression.html">s02-time-persistence-regression.html</a></td><td>Time-entry storage normalization contract</td></tr>
+      <tr><td><a href="s03-current-day-backdated-timer.html">s03-current-day-backdated-timer.html</a></td><td>Current-day default and backdated timer start</td></tr>
+      <tr><td><a href="s04-legacy-migration.html">s04-legacy-migration.html</a></td><td>One-time migration from pre-merge LocalTasks/LocalTimetracker storage keys</td></tr>
+      <tr><td><a href="t00-capture-and-triage.html">t00-capture-and-triage.html</a></td><td>Inbox capture and triage</td></tr>
+      <tr><td><a href="t01-priority-effort-guardrails.html">t01-priority-effort-guardrails.html</a></td><td>Priority/effort guardrails</td></tr>
+      <tr><td><a href="t02-week-planning-carryover.html">t02-week-planning-carryover.html</a></td><td>Week planning and carry-over</td></tr>
+      <tr><td><a href="t03-daily-backup.html">t03-daily-backup.html</a></td><td>Daily backup due/banner logic</td></tr>
+      <tr><td><a href="t04-post-hoc-editing.html">t04-post-hoc-editing.html</a></td><td>Post-hoc task editing</td></tr>
+      <tr><td><a href="t05-render-after-manual-entry.html">t05-render-after-manual-entry.html</a></td><td>Rendering after a manual time entry</td></tr>
+      <tr><td><a href="t06-manual-entry-validation.html">t06-manual-entry-validation.html</a></td><td>Manual entry validation</td></tr>
+      <tr><td><a href="t07-timer-start-stop.html">t07-timer-start-stop.html</a></td><td>Timer start/stop</td></tr>
+      <tr><td><a href="t08-timer-replace-and-future-end.html">t08-timer-replace-and-future-end.html</a></td><td>Timer replace and future end handling</td></tr>
+      <tr><td><a href="t09-filter-range-chips.html">t09-filter-range-chips.html</a></td><td>Filter range chips</td></tr>
+      <tr><td><a href="t10-group-by.html">t10-group-by.html</a></td><td>Grouping (ticket/day)</td></tr>
+      <tr><td><a href="t11-chart-tooltip.html">t11-chart-tooltip.html</a></td><td>Chart tooltip</td></tr>
+      <tr><td><a href="t12-edit-and-delete-with-undo.html">t12-edit-and-delete-with-undo.html</a></td><td>Edit and delete with undo</td></tr>
+      <tr><td><a href="t13-auto-stop-end-of-day.html">t13-auto-stop-end-of-day.html</a></td><td>Auto-stop at end of day</td></tr>
+      <tr><td><a href="t14-timer-minute-rounding.html">t14-timer-minute-rounding.html</a></td><td>Timer minute rounding</td></tr>
+      <tr><td><a href="t15-future-start-timer.html">t15-future-start-timer.html</a></td><td>Future timer start handling</td></tr>
+      <tr><td><a href="t16-task-timer-linking.html">t16-task-timer-linking.html</a></td><td>taskId link between time entries and tasks, tracked-minutes sum</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T01 priority and effort guardrails</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T01 Priority and Effort Guardrails</h1>
+  <p>Pins the two boundaries that define the app's scope. Downwards: a task of 15 minutes or less offers completion as its primary action. Upwards: a task marked as oversized cannot be planned into a week at all, and escalating it records the story key and moves it out of the working set.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable state</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const results = [];
+      const MAX_TITLE = 120, MAX_NOTES = 2000, MAX_CONTEXT = 40, MAX_EXTERNAL_REF = 60, MAX_CARRY = 99;
+      const PRIORITY_KEYS = ['zero', 'eighty', 'nice'];
+      const EFFORT_KEYS = ['quick', 'small', 'medium', 'toolarge'];
+      const STATUS_KEYS = ['inbox', 'backlog', 'planned', 'done', 'dropped', 'escalated'];
+      const TERMINAL = ['done', 'dropped', 'escalated'];
+      const isTerminal = key => TERMINAL.includes(key);
+      const WEEK = '2026-W32';
+
+      let clock = 1000;
+      const now = () => (clock += 10);
+
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+      function clampNumber(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        return Math.min(max, Math.max(min, Math.round(n)));
+      }
+      function parseIsoWeekKey(key) {
+        const m = /^(\d{4})-W(\d{2})$/.exec(String(key || ''));
+        if (!m) return null;
+        const week = Number(m[2]);
+        if (week < 1 || week > 53) return null;
+        return { year: Number(m[1]), week };
+      }
+      function normalizeTask(t) {
+        const priority = PRIORITY_KEYS.includes(t.priority) ? t.priority : null;
+        const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
+        let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
+        let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
+        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        if (status === 'planned' && !plannedWeek) status = 'backlog';
+        if (status !== 'planned') plannedWeek = null;
+        const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
+        const updatedAt = Number.isFinite(Number(t.updatedAt)) ? Number(t.updatedAt) : createdAt;
+        const doneAt = Number.isFinite(Number(t.doneAt)) && Number(t.doneAt) > 0 ? Number(t.doneAt) : null;
+        return {
+          id: typeof t.id === 'string' && t.id ? t.id : 'generated-id',
+          title: sanitizeText(t.title, MAX_TITLE),
+          notes: sanitizeText(t.notes || '', MAX_NOTES),
+          context: sanitizeText(t.context || '', MAX_CONTEXT),
+          priority, effort, status, plannedWeek,
+          todayFlag: status === 'planned' ? Boolean(t.todayFlag) : false,
+          carryCount: clampNumber(t.carryCount || 0, 0, MAX_CARRY),
+          externalRef: sanitizeText(t.externalRef || '', MAX_EXTERNAL_REF),
+          createdAt, updatedAt,
+          doneAt: isTerminal(status) ? (doneAt || updatedAt || createdAt) : null
+        };
+      }
+
+      const tasks = [];
+      const findTask = id => tasks.find(t => t.id === id) || null;
+      let idCounter = 0;
+
+      function makeTask(priority, effort, status) {
+        const ts = now();
+        const task = normalizeTask({
+          id: 'task-' + (++idCounter), title: 'Aufgabe ' + idCounter,
+          priority, effort, status: status || 'inbox',
+          plannedWeek: status === 'planned' ? WEEK : null,
+          createdAt: ts, updatedAt: ts
+        });
+        tasks.push(task);
+        return task;
+      }
+
+      // ── Reducers under test, copied from index.html ──────────
+      function planTask(id, weekKey) {
+        const task = findTask(id);
+        if (!task || !task.priority || !task.effort) return;
+        if (!parseIsoWeekKey(weekKey)) return;
+        if (task.effort === 'toolarge') return; // guardrail
+        task.status = 'planned';
+        task.plannedWeek = weekKey;
+        task.doneAt = null;
+        task.updatedAt = now();
+      }
+
+      function completeTask(id) {
+        const task = findTask(id);
+        if (!task) return;
+        task.status = 'done';
+        task.plannedWeek = null;
+        task.todayFlag = false;
+        task.doneAt = now();
+        task.updatedAt = task.doneAt;
+      }
+
+      function escalateTask(id, ref) {
+        const task = findTask(id);
+        if (!task) return;
+        task.externalRef = sanitizeText(ref, MAX_EXTERNAL_REF);
+        task.status = 'escalated';
+        task.plannedWeek = null;
+        task.todayFlag = false;
+        task.doneAt = now();
+        task.updatedAt = task.doneAt;
+      }
+
+      function dropTask(id) {
+        const task = findTask(id);
+        if (!task) return;
+        task.status = 'dropped';
+        task.plannedWeek = null;
+        task.todayFlag = false;
+        task.doneAt = now();
+        task.updatedAt = task.doneAt;
+      }
+
+      // Mirrors guardFooter() in index.html: which actions a triaged card offers.
+      function guardActionsFor(effort) {
+        if (effort === 'quick') return ['complete', 'plan', 'backlog'];
+        if (effort === 'toolarge') return ['escalate', 'drop'];
+        return ['plan', 'backlog', 'complete'];
+      }
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + String(row.details).replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+        document.getElementById('payload').textContent = JSON.stringify(tasks, null, 2);
+      }
+
+      try {
+        // ── Lower guardrail: quick wins ──────────────────────
+        const quick = makeTask('nice', 'quick');
+        assert('a quick win offers completion first, planning only as a fallback',
+          guardActionsFor('quick')[0] === 'complete' && guardActionsFor('quick').includes('plan'),
+          JSON.stringify(guardActionsFor('quick')));
+
+        completeTask(quick.id);
+        assert('completing a quick win sets a terminal state with a doneAt',
+          quick.status === 'done' && quick.doneAt > 0 && quick.plannedWeek === null && quick.todayFlag === false,
+          JSON.stringify(quick));
+
+        const quickPlanned = makeTask('eighty', 'quick');
+        planTask(quickPlanned.id, WEEK);
+        assert('a quick win may still be planned when the moment is wrong',
+          quickPlanned.status === 'planned' && quickPlanned.plannedWeek === WEEK,
+          JSON.stringify(quickPlanned));
+
+        // ── Upper guardrail: oversized work ──────────────────
+        const big = makeTask('zero', 'toolarge');
+        assert('an oversized task offers escalation instead of planning',
+          !guardActionsFor('toolarge').includes('plan') &&
+          guardActionsFor('toolarge')[0] === 'escalate',
+          JSON.stringify(guardActionsFor('toolarge')));
+
+        planTask(big.id, WEEK);
+        assert('planning an oversized task is refused by the reducer as well',
+          big.status === 'inbox' && big.plannedWeek === null,
+          JSON.stringify(big));
+
+        escalateTask(big.id, '  PROJ-1234\u0000  ');
+        assert('escalation records a sanitized story key and leaves the working set',
+          big.status === 'escalated' && big.externalRef === 'PROJ-1234' &&
+          big.doneAt > 0 && big.plannedWeek === null && big.todayFlag === false,
+          JSON.stringify(big));
+
+        // Escalating straight from the inbox is the common path.
+        const straight = makeTask(null, null);
+        escalateTask(straight.id, 'PROJ-9');
+        assert('escalating directly from the inbox works without triage',
+          straight.status === 'escalated' && straight.externalRef === 'PROJ-9',
+          JSON.stringify(straight));
+
+        // A planned task that gets re-marked as oversized stays planned until
+        // it is escalated or dropped — the guardrail advises, it does not delete.
+        const grew = makeTask('eighty', 'medium');
+        planTask(grew.id, WEEK);
+        grew.effort = 'toolarge';
+        planTask(grew.id, '2026-W33');
+        assert('an already planned task cannot be re-planned once marked oversized',
+          grew.status === 'planned' && grew.plannedWeek === WEEK,
+          JSON.stringify(grew));
+
+        dropTask(grew.id);
+        assert('dropping is always available and is terminal',
+          grew.status === 'dropped' && grew.doneAt > 0 && grew.plannedWeek === null,
+          JSON.stringify(grew));
+
+        assert('story keys are truncated to the documented maximum',
+          (() => { const t = makeTask('nice', 'toolarge'); escalateTask(t.id, 'K'.repeat(MAX_EXTERNAL_REF + 20)); return t.externalRef.length === MAX_EXTERNAL_REF; })(),
+          JSON.stringify({ max: MAX_EXTERNAL_REF }));
+      } catch (err) {
+        console.error(err);
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S02 current day and backdated timer regression</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>S02 Current Day and Backdated Timer Regression</h1>
+  <p>This dependency-free page checks the source-level contract for the default current-day focus and the timer backdating controls.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+  <h2>Inspectable source snippets</h2>
+  <pre id="payload"></pre>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const results = [];
+
+      function assert(name, condition, details) {
+        results.push({ name, pass: Boolean(condition), details });
+        if (!condition) throw new Error(name + ': ' + details);
+      }
+
+      function extractFunction(source, name) {
+        const start = source.indexOf('function ' + name + '(');
+        if (start < 0) return '';
+        let depth = 0;
+        let opened = false;
+        for (let i = start; i < source.length; i += 1) {
+          if (source[i] === '{') {
+            depth += 1;
+            opened = true;
+          } else if (source[i] === '}') {
+            depth -= 1;
+            if (opened && depth === 0) return source.slice(start, i + 1);
+          }
+        }
+        return '';
+      }
+
+      function formatDateInput(date) {
+        const d = new Date(date);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      }
+
+      function render() {
+        const tbody = document.getElementById('results');
+        tbody.innerHTML = '';
+        results.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + row.name + '</td><td class="' + (row.pass ? 'pass' : 'fail') + '">' + (row.pass ? 'PASS' : 'FAIL') + '</td><td><pre>' + row.details.replaceAll('<', '&lt;') + '</pre></td>';
+          tbody.appendChild(tr);
+        });
+        document.getElementById('status').innerHTML = results.every(r => r.pass)
+          ? '<strong class="pass">All assertions passed.</strong>'
+          : '<strong class="fail">One or more assertions failed.</strong>';
+      }
+
+      fetch('../index.html')
+        .then(response => {
+          if (!response.ok) throw new Error('Could not load index.html: HTTP ' + response.status);
+          return response.text();
+        })
+        .then(source => {
+          const initDefaults = extractFunction(source, 'initDefaults');
+          const startTimer = extractFunction(source, 'startTimer');
+          const internalStopTimer = extractFunction(source, 'internalStopTimer');
+          const today = formatDateInput(new Date());
+
+          assert('current-day default is applied during initialization', initDefaults.includes('const today = formatDateInput(new Date())') && initDefaults.includes('dom.dayFocus.value = today') && initDefaults.includes('applyFocusedDay(today)'), initDefaults);
+          assert('timer time control exists (date is implicit "today")', source.includes('id="timerStartTime" type="time"'), 'timerStartTime control present');
+          assert('startTimer reads the optional start time from #timerStartTime', startTimer.includes('dom.timerStartTime.value') && startTimer.includes('localDateTimeToTs(today, dom.timerStartTime.value)'), startTimer);
+          assert('backdated timer start is persisted instead of hard-coded Date.now()', startTimer.includes('startTs') && startTimer.includes('requestedStartTs'), startTimer);
+          assert('future same-day timer starts are now allowed (no longer rejected)', !startTimer.includes('Die Startzeit darf nicht in der Zukunft liegen.'), startTimer);
+          assert('future timer end times are now allowed (no longer rejected at stop)', !internalStopTimer.includes('Die Endzeit darf nicht in der Zukunft liegen'), internalStopTimer);
+          assert('end time must be after start time (validation persists)', internalStopTimer.includes('Die Endzeit darf nicht vor der Startzeit liegen'), internalStopTimer);
+
+          document.getElementById('payload').textContent = JSON.stringify({
+            today,
+            initDefaults,
+            startTimer,
+            internalStopTimer
+          }, null, 2);
+          render();
+        })
+        .catch(err => {
+          results.push({ name: 'test harness completed', pass: false, details: err.stack || String(err) });
+          document.getElementById('payload').textContent = err.stack || String(err);
+          render();
+        });
+    })();
+  </script>
+</body>
+</html>

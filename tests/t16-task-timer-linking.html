@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T16 task/timer linking</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T16 Task / Timer Linking</h1>
+  <p>Exercises the <code>taskId</code> link between time entries and tasks: normalization keeps the field, a typed ticket resolves to a matching task by <code>externalRef</code> or title, and tracked minutes are summed only for the matching task.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      'use strict';
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).trim().slice(0, maxLen);
+      }
+
+      // Mirrors normalizeEntry() in index.html's time module.
+      function normalizeEntry(e) {
+        return {
+          id: typeof e.id === 'string' ? e.id : 'id',
+          ticket: sanitizeText(e.ticket, 60),
+          startTs: Number(e.startTs),
+          endTs: Number(e.endTs),
+          pauseMinutes: Number(e.pauseMinutes || 0),
+          taskId: typeof e.taskId === 'string' ? e.taskId : null
+        };
+      }
+
+      // Mirrors resolveTaskIdForTicket() in index.html's time module.
+      function resolveTaskIdForTicket(ticket, tasks) {
+        if (!ticket) return null;
+        const needle = ticket.trim().toLowerCase();
+        const match = tasks.find(t =>
+          (t.externalRef && t.externalRef.toLowerCase() === needle) || t.title.toLowerCase() === needle
+        );
+        return match ? match.id : null;
+      }
+
+      // Mirrors getNetDurationMs() + getTrackedMs() in index.html's time module.
+      function getNetDurationMs(entry) {
+        return Math.max(0, (entry.endTs - entry.startTs) - ((entry.pauseMinutes || 0) * 60000));
+      }
+      function getTrackedMs(entries, taskId) {
+        if (!taskId) return 0;
+        return entries.filter(e => e.taskId === taskId).reduce((sum, e) => sum + getNetDurationMs(e), 0);
+      }
+
+      assert(
+        'normalizeEntry keeps an explicit string taskId',
+        normalizeEntry({ id: 'e1', ticket: 'X', startTs: 0, endTs: 1000, taskId: 'task-1' }).taskId === 'task-1'
+      );
+      assert(
+        'normalizeEntry defaults a missing taskId to null',
+        normalizeEntry({ id: 'e2', ticket: 'X', startTs: 0, endTs: 1000 }).taskId === null
+      );
+      assert(
+        'normalizeEntry rejects a non-string taskId back to null',
+        normalizeEntry({ id: 'e3', ticket: 'X', startTs: 0, endTs: 1000, taskId: 42 }).taskId === null
+      );
+
+      const tasks = [
+        { id: 'task-1', title: 'Migrate DB', externalRef: 'PROJ-42' },
+        { id: 'task-2', title: 'Write docs', externalRef: '' }
+      ];
+      assert(
+        'a typed ticket matching a task externalRef resolves that task (case-insensitive)',
+        resolveTaskIdForTicket('proj-42', tasks) === 'task-1'
+      );
+      assert(
+        'a typed ticket matching a task title (no externalRef) resolves that task',
+        resolveTaskIdForTicket('write docs', tasks) === 'task-2'
+      );
+      assert(
+        'a typed ticket matching nothing resolves to null',
+        resolveTaskIdForTicket('unrelated-ticket', tasks) === null
+      );
+
+      const entries = [
+        normalizeEntry({ id: 'e1', ticket: 'PROJ-42', startTs: 0, endTs: 30 * 60000, taskId: 'task-1' }),
+        normalizeEntry({ id: 'e2', ticket: 'PROJ-42', startTs: 0, endTs: 15 * 60000, taskId: 'task-1' }),
+        normalizeEntry({ id: 'e3', ticket: 'OTHER-1', startTs: 0, endTs: 60 * 60000, taskId: 'task-2' })
+      ];
+      assert(
+        'tracked minutes sum only entries linked to the requested task',
+        getTrackedMs(entries, 'task-1') === 45 * 60000,
+        { ms: getTrackedMs(entries, 'task-1') }
+      );
+      assert(
+        'a task with no linked entries has zero tracked time',
+        getTrackedMs(entries, 'task-3-unused') === 0
+      );
+
+      const tbody = document.getElementById('results');
+      let allPass = true;
+      results.forEach(r => {
+        if (!r.pass) allPass = false;
+        const tr = document.createElement('tr');
+        const c1 = document.createElement('td'); c1.textContent = r.name;
+        const c2 = document.createElement('td'); c2.textContent = r.pass ? 'PASS' : 'FAIL'; c2.className = r.pass ? 'pass' : 'fail';
+        const c3 = document.createElement('td'); c3.textContent = r.details;
+        tr.append(c1, c2, c3);
+        tbody.appendChild(tr);
+      });
+      document.getElementById('status').textContent = allPass
+        ? `All ${results.length} checks passed.`
+        : `${results.filter(r => !r.pass).length} of ${results.length} checks failed.`;
+      document.getElementById('status').className = allPass ? 'pass' : 'fail';
+    })();
+  </script>
+</body>
+</html>

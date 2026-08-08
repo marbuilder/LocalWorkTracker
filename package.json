@@ -1,0 +1,14 @@
+{
+  "name": "local-work-tracker-tests",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Dev-only manifest for headless test runner. The app itself stays dependency-free.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run-headless.mjs"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "playwright": "~1.56.0"
+  }
+}

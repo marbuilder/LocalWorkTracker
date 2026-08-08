@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S04 legacy storage migration</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>S04 Legacy Storage Migration</h1>
+  <p>Exercises the one-time migration that copies pre-merge LocalTasks / LocalTimetracker <code>localStorage</code> keys into the LocalWorkTracker namespace, mirroring the boot script embedded at the top of <code>index.html</code>. Uses a scoped key prefix so it never touches real app data.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const P = 's04-'; // scoped prefix so this test never touches real app keys
+      const results = [];
+
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      // Mirrors the migration block in index.html's first <script>, but reading
+      // from/writing to prefixed keys so this page stays self-contained.
+      function migrateLegacyStorage() {
+        const LEGACY_MAP = [
+          [P + 'local-tasks-v1', P + 'local-work-tracker-v1-tasks'],
+          [P + 'local-tasks-v1-contexts', P + 'local-work-tracker-v1-contexts'],
+          [P + 'local-time-tracker-v1', P + 'local-work-tracker-v1-time-entries'],
+          [P + 'local-time-tracker-v1-ticket-suggestions', P + 'local-work-tracker-v1-time-entries-ticket-suggestions'],
+          [P + 'local-time-tracker-v1-ui-state', P + 'local-work-tracker-v1-time-entries-ui-state'],
+          [P + 'local-time-tracker-v1-pomodoro', P + 'local-work-tracker-v1-time-entries-pomodoro']
+        ];
+        LEGACY_MAP.forEach(([oldKey, newKey]) => {
+          if (localStorage.getItem(newKey) === null) {
+            const oldVal = localStorage.getItem(oldKey);
+            if (oldVal !== null) localStorage.setItem(newKey, oldVal);
+          }
+        });
+        const themeKey = P + 'local-work-tracker-v1-theme';
+        if (localStorage.getItem(themeKey) === null) {
+          const legacyTheme = localStorage.getItem(P + 'local-time-tracker-v1-theme') || localStorage.getItem(P + 'local-tasks-v1-theme');
+          if (legacyTheme === 'light' || legacyTheme === 'dark') localStorage.setItem(themeKey, legacyTheme);
+        }
+      }
+
+      // Clean slate for this scoped prefix.
+      Object.keys(localStorage).filter(k => k.startsWith(P)).forEach(k => localStorage.removeItem(k));
+
+      // --- Fixture: legacy LocalTasks + LocalTimetracker data present ---
+      localStorage.setItem(P + 'local-tasks-v1', JSON.stringify({ version: 1, tasks: [{ id: 'a1', title: 'Legacy Task' }], lastBackupDate: null, backupIntervalDays: 1 }));
+      localStorage.setItem(P + 'local-tasks-v1-contexts', JSON.stringify(['Legacy']));
+      localStorage.setItem(P + 'local-time-tracker-v1', JSON.stringify({ entries: [{ id: 'e1', ticket: 'LEGACY-1' }], activeTimer: null }));
+      localStorage.setItem(P + 'local-time-tracker-v1-ticket-suggestions', JSON.stringify(['LEGACY-1']));
+      localStorage.setItem(P + 'local-time-tracker-v1-theme', 'light');
+
+      migrateLegacyStorage();
+
+      assert(
+        'tasks migrated to the new namespaced key',
+        JSON.parse(localStorage.getItem(P + 'local-work-tracker-v1-tasks')).tasks[0].title === 'Legacy Task'
+      );
+      assert(
+        'contexts migrated',
+        JSON.parse(localStorage.getItem(P + 'local-work-tracker-v1-contexts'))[0] === 'Legacy'
+      );
+      assert(
+        'time entries migrated',
+        JSON.parse(localStorage.getItem(P + 'local-work-tracker-v1-time-entries')).entries[0].ticket === 'LEGACY-1'
+      );
+      assert(
+        'ticket suggestions migrated',
+        JSON.parse(localStorage.getItem(P + 'local-work-tracker-v1-time-entries-ticket-suggestions'))[0] === 'LEGACY-1'
+      );
+      assert(
+        'theme migrated from the time-tracker legacy key',
+        localStorage.getItem(P + 'local-work-tracker-v1-theme') === 'light'
+      );
+      assert(
+        'legacy keys are left untouched (no data loss for standalone apps)',
+        localStorage.getItem(P + 'local-tasks-v1') !== null && localStorage.getItem(P + 'local-time-tracker-v1') !== null
+      );
+
+      // --- Idempotency: running migration again must not overwrite already-migrated data ---
+      localStorage.setItem(P + 'local-tasks-v1', JSON.stringify({ version: 1, tasks: [{ id: 'a2', title: 'Should not overwrite' }] }));
+      migrateLegacyStorage();
+      assert(
+        'migration does not overwrite an already-populated new key on a second run',
+        JSON.parse(localStorage.getItem(P + 'local-work-tracker-v1-tasks')).tasks[0].title === 'Legacy Task'
+      );
+
+      // Cleanup.
+      Object.keys(localStorage).filter(k => k.startsWith(P)).forEach(k => localStorage.removeItem(k));
+
+      const tbody = document.getElementById('results');
+      let allPass = true;
+      results.forEach(r => {
+        if (!r.pass) allPass = false;
+        const tr = document.createElement('tr');
+        const c1 = document.createElement('td'); c1.textContent = r.name;
+        const c2 = document.createElement('td'); c2.textContent = r.pass ? 'PASS' : 'FAIL'; c2.className = r.pass ? 'pass' : 'fail';
+        const c3 = document.createElement('td'); c3.textContent = r.details;
+        tr.append(c1, c2, c3);
+        tbody.appendChild(tr);
+      });
+      document.getElementById('status').textContent = allPass
+        ? `All ${results.length} checks passed.`
+        : `${results.filter(r => !r.pass).length} of ${results.length} checks failed.`;
+      document.getElementById('status').className = allPass ? 'pass' : 'fail';
+    })();
+  </script>
+</body>
+</html>
