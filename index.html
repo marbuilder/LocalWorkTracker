@@ -180,7 +180,8 @@
     .shortcut-help {
       display: inline-flex; align-items: center; gap: 6px;
       font-size: 13px; color: var(--muted);
-      margin-left: 12px;
+      align-self: flex-end;
+      position: relative;
     }
     .shortcut-help summary { cursor: pointer; list-style: none; padding: 4px 8px; border-radius: 8px; }
     .shortcut-help summary::-webkit-details-marker { display: none; }
@@ -192,7 +193,7 @@
       font-size: 12px; color: var(--text);
     }
     .shortcut-help .shortcut-list {
-      position: absolute; margin-top: 6px;
+      position: absolute; top: 100%; right: 0; margin-top: 6px;
       padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
       border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
       display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
