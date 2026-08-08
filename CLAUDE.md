@@ -63,7 +63,7 @@ Unchanged from LocalTasks:
 }
 ```
 
-`orderKey` drives manual priorisation within Woche/Geplant and Heute im Fokus (`reorderTask`, `attachReorder`, `moveTaskStep` in TaskModule) — ascending within a priority bucket (`byPriority`), or ascending with no bucketing at all for the flat Heute-im-Fokus list (`focusTasks`). Legacy records without it default to `-updatedAt` in `normalizeTask`, reproducing the old "most recently touched first" order until a drag or the ▲/▼ buttons assign real values.
+`orderKey` drives manual priorisation within Woche/Geplant (`reorderTask`, `attachReorder`, `moveTaskStep` in TaskModule) — ascending within a priority bucket (`byPriority`). Legacy records without it default to `-updatedAt` in `normalizeTask`, reproducing the old "most recently touched first" order until a drag or the ▲/▼ buttons assign real values. `todayFlag` tasks are not a separate panel and are not force-sorted to the top — `renderPlannedCard` only highlights them (`.task-card.focus`) and shows "▶ Timer starten" directly off `task.todayFlag`, wherever `orderKey` places them within their priority group, so starring a task never fights a manual drag&drop reorder.
 
 ### Time entries (`local-work-tracker-v1-time-entries`)
 

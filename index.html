@@ -38,8 +38,8 @@
       --chart-c6: rgba(76,209,255,.88);
       --chart-c7: rgba(255,140,190,.88);
       --chart-c8: rgba(163,230,53,.88);
-      --gap-outer: 16px;
-      --gap-inner: 12px;
+      --gap-outer: 24px;
+      --gap-inner: 16px;
     }
     body[data-theme="light"] {
       --bg: #f3f5fa;
@@ -456,8 +456,8 @@
       --body-gradient: linear-gradient(180deg, var(--bg), #0f172a 35%, #0c1322 100%);
       --current-bg: linear-gradient(180deg, rgba(36,86,184,.22), rgba(36,86,184,.10));
       --current-border: rgba(106,169,255,.35);
-      --gap-outer: 16px;
-      --gap-inner: 12px;
+      --gap-outer: 24px;
+      --gap-inner: 16px;
     }
     body[data-theme="light"] {
       --bg: #f3f5fa;
@@ -3651,14 +3651,12 @@
         render();
       }
 
-      // Manual priorisation (Woche/Geplant + Heute im Fokus only — see
-      // renderPlannedCard). "Peers" is whatever list the task is currently
-      // displayed in: the flat today-flagged list, or its priority group
-      // within the planned week.
+      // Manual priorisation (Woche/Geplant only — see renderPlannedCard).
+      // "Peers" is the task's priority group within its planned week, exactly
+      // as rendered by renderGroups — todayFlag only changes highlighting,
+      // not ordering, so it never fights a manual drag&drop reorder.
       function reorderPeers(task) {
-        return task.todayFlag
-          ? focusTasks()
-          : plannedTasks(task.plannedWeek).filter(t => !t.todayFlag && t.priority === task.priority);
+        return plannedTasks(task.plannedWeek).filter(t => t.priority === task.priority);
       }
 
       // orderedIds is the full new order for one peer list (drag&drop drop
@@ -3944,12 +3942,8 @@
         return state.tasks.filter(t => t.status === 'planned' && t.plannedWeek === weekKey).sort(byPriority);
       }
 
-      // Flat, ungrouped list — sorted purely by orderKey (not priority-bucketed
-      // like byPriority) so free drag&drop reordering across priorities works
-      // as expected in the "Heute im Fokus" section.
       function focusTasks() {
-        return state.tasks.filter(t => t.status === 'planned' && t.todayFlag)
-          .sort((a, b) => a.orderKey - b.orderKey || b.updatedAt - a.updatedAt);
+        return state.tasks.filter(t => t.status === 'planned' && t.todayFlag).sort(byPriority);
       }
 
       function archivedTasks() {
@@ -4272,10 +4266,10 @@
         return card;
       }
 
-      function renderPlannedCard(task, now, opts = {}) {
-        const { card, main } = taskCardShell(task, now, { focus: opts.focus });
+      function renderPlannedCard(task, now) {
+        const { card, main } = taskCardShell(task, now, { focus: task.todayFlag });
         // Manual drag&drop priorisation is scoped to this card type only
-        // (Woche/Geplant + Heute im Fokus) — see attachReorder().
+        // (Woche/Geplant) — see attachReorder().
         card.draggable = true;
         card.dataset.taskId = task.id;
         card.addEventListener('dragstart', ev => {
@@ -4308,7 +4302,7 @@
           onClick: () => toggleToday(task.id)
         });
         actions.appendChild(star);
-        if (opts.focus && window.LWT && window.LWT.time) {
+        if (task.todayFlag && window.LWT && window.LWT.time) {
           actions.appendChild(button('▶ Timer starten', {
             className: 'primary',
             title: 'Timer für diese Aufgabe starten',
@@ -4519,23 +4513,6 @@
         navPanel.appendChild(nav);
         frag.appendChild(navPanel);
 
-        // Heute-Fokus tasks render inline — highlighted (.task-card.focus)
-        // and pulled to the top — instead of a separate panel. Only
-        // meaningful while looking at the current week.
-        let todayItems = [];
-        if (isCurrent) {
-          todayItems = focusTasks();
-          if (todayItems.length) {
-            const todayList = el('div', { className: 'task-list' });
-            todayItems.forEach(t => todayList.appendChild(renderPlannedCard(t, now, { focus: true })));
-            frag.appendChild(todayList);
-            attachReorder(todayList, null);
-            if (todayItems.length > FOCUS_SOFT_LIMIT) {
-              frag.appendChild(el('p', { className: 'hint', text: `${todayItems.length} Aufgaben im Fokus. Mehr als ${FOCUS_SOFT_LIMIT} an einem Tag geht selten aus.` }));
-            }
-          }
-        }
-
         // Leftovers from earlier weeks.
         const leftovers = leftoverTasks(ui.weekKey);
         if (leftovers.length) {
@@ -4568,18 +4545,17 @@
         }
 
         const planned = plannedTasks(ui.weekKey);
-        const todayIds = new Set(todayItems.map(t => t.id));
-        const restPlanned = planned.filter(t => !todayIds.has(t.id));
+        const todayCount = planned.filter(t => t.todayFlag).length;
         const panel = el('section', { className: 'panel' });
-        panel.appendChild(el('div', { className: 'panel-head' }, [
-          el('h2', { text: `Geplant für ${shortWeek(ui.weekKey)} (${planned.length})` })
-        ]));
+        const heading = [el('h2', { text: `Geplant für ${shortWeek(ui.weekKey)} (${planned.length})` })];
+        panel.appendChild(el('div', { className: 'panel-head' }, heading));
+        if (todayCount) {
+          panel.appendChild(el('p', { className: 'hint', text: `${todayCount} davon heute im Fokus (★, farblich markiert).` }));
+        }
         if (!planned.length) {
           panel.appendChild(el('div', { className: 'empty', text: 'Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.' }));
-        } else if (restPlanned.length) {
-          renderGroups(panel, restPlanned, (t, n) => renderPlannedCard(t, n), now, { reorderable: true });
         } else {
-          panel.appendChild(el('div', { className: 'empty', text: 'Alle Aufgaben dieser Woche sind aktuell im Heute-Fokus markiert.' }));
+          renderGroups(panel, planned, (t, n) => renderPlannedCard(t, n), now, { reorderable: true });
         }
         frag.appendChild(panel);
         return frag;

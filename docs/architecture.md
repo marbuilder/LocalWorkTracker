@@ -28,8 +28,8 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Posteingang (inbox capture) | `renderInboxView`, `captureTask`, `inboxTasks` | TaskModule |
 | Triage (priority/effort) | `changePriority`, `changeEffort`, `chipRow` | TaskModule |
 | Woche (weekly planning) | `renderWeekView`, `plannedTasks`, `leftoverTasks`, `renderGroups`, `groupByPriority` | TaskModule |
-| Heute im Fokus (inline highlight, no separate panel) | `focusTasks`, `toggleToday`, `renderPlannedCard` (`opts.focus` → `.task-card.focus`) | TaskModule |
-| Manual drag&drop priorisation (Woche + Heute im Fokus only) | `reorderTask`, `reorderPeers`, `moveTaskStep`, `attachReorder`, `getDragAfterElement` | TaskModule |
+| Heute im Fokus (inline highlight within Woche/Geplant — no separate panel, no forced sort order) | `toggleToday`, `focusTasks`, `renderPlannedCard` (highlight + ▶ Timer starten driven by `task.todayFlag` directly, not an opts flag) | TaskModule |
+| Manual drag&drop priorisation (Woche/Geplant only, incl. today-flagged tasks) | `reorderTask`, `reorderPeers`, `moveTaskStep`, `attachReorder`, `getDragAfterElement` | TaskModule |
 | Backlog | `renderBacklogView`, `backlogTasks`, `renderBacklogCard`, `isStale` | TaskModule |
 | Archiv | `renderArchiveView`, `archivedTasks`, `renderArchiveCard` | TaskModule |
 | Escalation guardrail | `escalateTask`, `changeEffort` ('toolarge' branch) | TaskModule |
@@ -138,7 +138,7 @@ Not renamed, deliberately centralized (one instance, owned by AppShell, both mod
 
 One `<style>` block (lines 8–809): LocalTimetracker's stylesheet (has the chart `--chart-*` variables) followed by LocalTasks' stylesheet (adds `.tabbar`, `.task-card`, `.chip-group`, etc.), followed by a small `shell` section (`#mainTabbar`, `.tab-panel[hidden]`). The two base stylesheets are ~90% identical (`--bg`, `--panel`, `--accent`, `--border`, `--muted`, button/input/dialog/toast styles, `panel`/`row`/`field` grid system) — duplicate rules are harmless since the values agree. `.tabbar` is reused as-is for **both** the main Zeit/Aufgaben tabs and TaskModule's inner Posteingang/Woche/Backlog/Archiv tabs — same visual language, no separate "main tab" styling needed beyond what's in the `shell` section.
 
-Spacing between boxes is driven by two custom properties defined in **both** `:root` blocks (so Time and Task stay pixel-identical): `--gap-outer` (16px — `.container`, `.app-head`, `.grid`, `#viewRoot`, the space between panels) and `--gap-inner` (12px — `.row`, `.stats`, `.filter-row`, `.task-list`, `.task-main`, `.dialog-body`, the space inside a panel). Add new panel-to-panel or inside-panel gaps to the matching variable rather than a new hardcoded value.
+Spacing between boxes is driven by two custom properties defined in **both** `:root` blocks (so Time and Task stay pixel-identical): `--gap-outer` (24px — `.container`, `.app-head`, `.grid`, `#viewRoot`, the space between panels) and `--gap-inner` (16px — `.row`, `.stats`, `.filter-row`, `.task-list`, `.task-main`, `.dialog-body`, the space inside a panel). Add new panel-to-panel or inside-panel gaps to the matching variable rather than a new hardcoded value.
 
 Breakpoints unchanged: `1050px` (two-column grids collapse), `700px` (mobile — stacks `.current-row`, makes tables card-like). Light theme via `body[data-theme="light"]`, toggled by AppShell only — neither module has its own theme code anymore (see below).
 
