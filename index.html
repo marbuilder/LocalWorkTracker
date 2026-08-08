@@ -4908,7 +4908,6 @@
         time: qs('tabPanelTime'),
         tasks: qs('tabPanelTasks')
       };
-      var shortcutHelp = qs('shortcutHelp');
       function switchTab(name) {
         if (!panels[name]) return;
         Object.keys(panels).forEach(function (key) {
@@ -4919,10 +4918,6 @@
           btn.classList.toggle('active', active);
           btn.setAttribute('aria-current', active ? 'page' : 'false');
         });
-        // Zeit-specific shortcuts (Ctrl+Enter, Esc, Alt+arrows, Alt+T) only
-        // apply on the Zeit tab, even though the icon now lives in the
-        // shared #mainTabbar row alongside the tab buttons.
-        if (shortcutHelp) shortcutHelp.hidden = name !== 'time';
         try { localStorage.setItem('local-work-tracker-v1-ui-active-tab', name); } catch (err) { /* ignore */ }
       }
       tabButtons.forEach(function (btn) {
