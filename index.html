@@ -38,6 +38,8 @@
       --chart-c6: rgba(76,209,255,.88);
       --chart-c7: rgba(255,140,190,.88);
       --chart-c8: rgba(163,230,53,.88);
+      --gap-outer: 16px;
+      --gap-inner: 12px;
     }
     body[data-theme="light"] {
       --bg: #f3f5fa;
@@ -68,8 +70,8 @@
       color: var(--text);
     }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-    .container { max-width: 1380px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .app-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    .container { max-width: 1380px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: var(--gap-outer); }
+    .app-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--gap-outer); }
     .app-head h1 { flex: 1; }
     #themeToggleBtn {
       width: auto; min-height: 36px; padding: 6px 12px; font-size: 18px; line-height: 1;
@@ -77,7 +79,7 @@
     }
     h1, h2, h3 { margin: 0 0 12px; }
     p { color: var(--muted); }
-    .grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+    .grid { display: grid; gap: var(--gap-outer); grid-template-columns: 1fr 1fr; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -89,7 +91,7 @@
     .row {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
-      gap: 10px;
+      gap: var(--gap-inner);
       align-items: end;
       margin-bottom: 10px;
     }
@@ -225,7 +227,7 @@
       z-index: 20;
     }
     .field-info .field-info-tip b { color: var(--accent); }
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap-inner); }
     .stat { padding: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
     .stat .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .stat .label { color: var(--muted); font-size: 13px; }
@@ -454,6 +456,8 @@
       --body-gradient: linear-gradient(180deg, var(--bg), #0f172a 35%, #0c1322 100%);
       --current-bg: linear-gradient(180deg, rgba(36,86,184,.22), rgba(36,86,184,.10));
       --current-border: rgba(106,169,255,.35);
+      --gap-outer: 16px;
+      --gap-inner: 12px;
     }
     body[data-theme="light"] {
       --bg: #f3f5fa;
@@ -486,11 +490,11 @@
       color: var(--text);
     }
     :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-    .container { max-width: 1380px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: 18px; }
+    .container { max-width: 1380px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: var(--gap-outer); }
     /* Panels are appended straight into #viewRoot, so the spacing between them
        lives here — the container gap only separates its own four children. */
-    #viewRoot { display: flex; flex-direction: column; gap: 18px; }
-    .app-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    #viewRoot { display: flex; flex-direction: column; gap: var(--gap-outer); }
+    .app-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--gap-outer); }
     .app-head h1 { flex: 1; margin: 0; font-size: 24px; }
     .app-head-actions { display: flex; gap: 8px; align-items: center; }
     #themeToggleBtn {
@@ -600,7 +604,7 @@
     }
     .week-nav .week-label { text-align: center; font-weight: 700; font-size: 16px; }
     .week-nav button { width: auto; }
-    .filter-row { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
+    .filter-row { display: grid; gap: var(--gap-inner); grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
 
     /* ── Banners ───────────────────────────────────────────────── */
     .banner {
@@ -616,7 +620,7 @@
     }
 
     /* ── Task cards ────────────────────────────────────────────── */
-    .task-list { display: flex; flex-direction: column; gap: 12px; }
+    .task-list { display: flex; flex-direction: column; gap: var(--gap-inner); }
     .task-card {
       background: var(--panel-2);
       border: 1px solid var(--border);
@@ -625,7 +629,9 @@
       display: flex; flex-direction: column; gap: 8px;
     }
     .task-card.focus { border-color: var(--current-border); background: var(--current-bg); }
-    .task-main { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+    .task-card[draggable="true"] { cursor: grab; }
+    .task-card.dragging { opacity: .4; cursor: grabbing; }
+    .task-main { display: flex; gap: var(--gap-inner); align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
     .task-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
     .task-title { font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
     .task-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
@@ -637,6 +643,10 @@
       border-radius: 999px; background: transparent; border-color: var(--border); color: var(--muted);
     }
     .star-btn.on { color: var(--warn); border-color: var(--warn); }
+    .reorder-btn {
+      width: auto; min-height: 34px; padding: 6px 8px; font-size: 12px; line-height: 1;
+    }
+    .reorder-btn:disabled { opacity: .35; cursor: default; }
     .task-actions button.ghost.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
     /* ── Pills ─────────────────────────────────────────────────── */
@@ -771,7 +781,7 @@
       border-radius: 14px; background: var(--dialog-bg); color: var(--text); padding: 0;
     }
     dialog::backdrop { background: rgba(0,0,0,.5); }
-    .dialog-body { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .dialog-body { padding: 18px; display: flex; flex-direction: column; gap: var(--gap-inner); }
     .dialog-body h3 { margin: 0; }
     .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .dialog-actions button { width: auto; min-height: 38px; padding: 8px 16px; }
@@ -802,6 +812,10 @@
       width: auto; min-height: 40px; padding: 8px 18px; font-size: 15px; font-weight: 600;
     }
     .tab-panel[hidden] { display: none; }
+    .app-footer {
+      font-size: 12px; color: var(--muted); text-align: center;
+      padding-top: 4px; border-top: 1px solid var(--border);
+    }
     @media (max-width: 700px) {
       #mainTabbar { flex-direction: column; }
     }
@@ -1140,6 +1154,10 @@
 
       </section>
     </main>
+
+    <footer class="app-footer">
+      Diese Seite wird über GitHub Pages bereitgestellt und unterliegt den Datenschutzbestimmungen von GitHub. Deine Aufgaben- und Zeiterfassungsdaten werden ausschließlich im lokalen Speicher (localStorage) deines Browsers gespeichert und nicht an GitHub oder andere Server übertragen.
+    </footer>
   </div>
 
   <div id="toastRoot" role="status" aria-live="polite" aria-atomic="false"></div>
@@ -3475,6 +3493,10 @@
         const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
         const updatedAt = Number.isFinite(Number(t.updatedAt)) ? Number(t.updatedAt) : createdAt;
         const doneAt = Number.isFinite(Number(t.doneAt)) && Number(t.doneAt) > 0 ? Number(t.doneAt) : null;
+        // Legacy/unset records fall back to -updatedAt, so ascending orderKey
+        // sort reproduces the old "most recently touched first" tiebreak
+        // until a manual drag reorder assigns real (small integer) values.
+        const orderKey = Number.isFinite(Number(t.orderKey)) ? Number(t.orderKey) : -updatedAt;
 
         return {
           id: typeof t.id === 'string' && t.id ? t.id : cryptoRandomId(),
@@ -3488,6 +3510,7 @@
           todayFlag: status === 'planned' ? Boolean(t.todayFlag) : false,
           carryCount: clampNumber(t.carryCount || 0, 0, MAX_CARRY),
           externalRef: sanitizeText(t.externalRef || '', MAX_EXTERNAL_REF),
+          orderKey,
           createdAt,
           updatedAt,
           doneAt: isTerminal(status) ? (doneAt || updatedAt || createdAt) : null
@@ -3626,6 +3649,47 @@
         touch(task);
         saveState();
         render();
+      }
+
+      // Manual priorisation (Woche/Geplant + Heute im Fokus only — see
+      // renderPlannedCard). "Peers" is whatever list the task is currently
+      // displayed in: the flat today-flagged list, or its priority group
+      // within the planned week.
+      function reorderPeers(task) {
+        return task.todayFlag
+          ? focusTasks()
+          : plannedTasks(task.plannedWeek).filter(t => !t.todayFlag && t.priority === task.priority);
+      }
+
+      // orderedIds is the full new order for one peer list (drag&drop drop
+      // target, or a computed swap from the up/down buttons). priorityKey is
+      // set only for a cross-group drag&drop drop, reassigning the dragged
+      // task's priority to match its new group.
+      function reorderTask(taskId, orderedIds, priorityKey) {
+        const task = findTask(taskId);
+        if (!task) return;
+        if (priorityKey != null && PRIORITY_KEYS.includes(priorityKey) && task.priority !== priorityKey) {
+          task.priority = priorityKey;
+        }
+        orderedIds.forEach((id, idx) => {
+          const t = findTask(id);
+          if (t) t.orderKey = idx;
+        });
+        touch(task);
+        saveState();
+        render();
+      }
+
+      function moveTaskStep(taskId, direction) {
+        const task = findTask(taskId);
+        if (!task) return;
+        const peers = reorderPeers(task);
+        const idx = peers.findIndex(t => t.id === task.id);
+        const swapIdx = idx + direction;
+        if (idx < 0 || swapIdx < 0 || swapIdx >= peers.length) return;
+        const orderedIds = peers.map(t => t.id);
+        [orderedIds[idx], orderedIds[swapIdx]] = [orderedIds[swapIdx], orderedIds[idx]];
+        reorderTask(task.id, orderedIds, null);
       }
 
       function changeEffort(id, effort) {
@@ -3866,7 +3930,7 @@
          Selectors
          ══════════════════════════════════════════════════════════ */
 
-      const byPriority = (a, b) => priorityOrder(a.priority) - priorityOrder(b.priority) || b.updatedAt - a.updatedAt;
+      const byPriority = (a, b) => priorityOrder(a.priority) - priorityOrder(b.priority) || a.orderKey - b.orderKey || b.updatedAt - a.updatedAt;
 
       function inboxTasks() {
         return state.tasks.filter(t => t.status === 'inbox').sort((a, b) => b.createdAt - a.createdAt);
@@ -3880,8 +3944,12 @@
         return state.tasks.filter(t => t.status === 'planned' && t.plannedWeek === weekKey).sort(byPriority);
       }
 
+      // Flat, ungrouped list — sorted purely by orderKey (not priority-bucketed
+      // like byPriority) so free drag&drop reordering across priorities works
+      // as expected in the "Heute im Fokus" section.
       function focusTasks() {
-        return state.tasks.filter(t => t.status === 'planned' && t.todayFlag).sort(byPriority);
+        return state.tasks.filter(t => t.status === 'planned' && t.todayFlag)
+          .sort((a, b) => a.orderKey - b.orderKey || b.updatedAt - a.updatedAt);
       }
 
       function archivedTasks() {
@@ -4206,7 +4274,34 @@
 
       function renderPlannedCard(task, now, opts = {}) {
         const { card, main } = taskCardShell(task, now, { focus: opts.focus });
+        // Manual drag&drop priorisation is scoped to this card type only
+        // (Woche/Geplant + Heute im Fokus) — see attachReorder().
+        card.draggable = true;
+        card.dataset.taskId = task.id;
+        card.addEventListener('dragstart', ev => {
+          ev.dataTransfer.effectAllowed = 'move';
+          ev.dataTransfer.setData('text/plain', task.id);
+          requestAnimationFrame(() => card.classList.add('dragging'));
+        });
+        card.addEventListener('dragend', () => card.classList.remove('dragging'));
+
         const actions = el('div', { className: 'task-actions' });
+        const peers = reorderPeers(task);
+        const peerIdx = peers.findIndex(t => t.id === task.id);
+        const moveUp = button('▲', {
+          className: 'ghost reorder-btn',
+          title: 'Nach oben verschieben',
+          onClick: () => moveTaskStep(task.id, -1)
+        });
+        moveUp.disabled = peerIdx <= 0;
+        const moveDown = button('▼', {
+          className: 'ghost reorder-btn',
+          title: 'Nach unten verschieben',
+          onClick: () => moveTaskStep(task.id, 1)
+        });
+        moveDown.disabled = peerIdx < 0 || peerIdx >= peers.length - 1;
+        actions.appendChild(moveUp);
+        actions.appendChild(moveDown);
         const star = button(task.todayFlag ? '★' : '☆', {
           className: 'star-btn' + (task.todayFlag ? ' on' : ''),
           title: task.todayFlag ? 'Aus dem Heute-Fokus nehmen' : 'In den Heute-Fokus nehmen',
@@ -4284,7 +4379,7 @@
         return card;
       }
 
-      function renderGroups(container, tasks, renderCard, now) {
+      function renderGroups(container, tasks, renderCard, now, opts = {}) {
         groupByPriority(tasks).forEach(group => {
           const section = el('div', { className: 'group' });
           const head = el('div', { className: 'group-head' });
@@ -4295,6 +4390,40 @@
           group.tasks.forEach(t => list.appendChild(renderCard(t, now)));
           section.appendChild(list);
           container.appendChild(section);
+          if (opts.reorderable) attachReorder(list, group.priority.key);
+        });
+      }
+
+      // Native HTML5 drag&drop, scoped to whichever `.task-list` container is
+      // passed in (Woche/Geplant groups, or the flat Heute-im-Fokus list —
+      // see renderWeekView). priorityKey is null for the flat list (no
+      // priority to reassign); for a grouped list it's that group's key, so
+      // dropping a card into a different priority group changes its priority.
+      function getDragAfterElement(container, y) {
+        const cards = Array.from(container.querySelectorAll(':scope > .task-card:not(.dragging)'));
+        return cards.reduce((closest, child) => {
+          const box = child.getBoundingClientRect();
+          const offset = y - box.top - box.height / 2;
+          if (offset < 0 && offset > closest.offset) return { offset, element: child };
+          return closest;
+        }, { offset: -Infinity, element: null }).element;
+      }
+
+      function attachReorder(listEl, priorityKey) {
+        listEl.addEventListener('dragover', ev => {
+          const dragging = listEl.querySelector('.task-card.dragging');
+          if (!dragging) return;
+          ev.preventDefault();
+          const after = getDragAfterElement(listEl, ev.clientY);
+          if (after == null) listEl.appendChild(dragging);
+          else listEl.insertBefore(dragging, after);
+        });
+        listEl.addEventListener('drop', ev => {
+          const dragging = listEl.querySelector('.task-card.dragging');
+          if (!dragging) return;
+          ev.preventDefault();
+          const orderedIds = Array.from(listEl.querySelectorAll(':scope > .task-card')).map(c => c.dataset.taskId);
+          reorderTask(dragging.dataset.taskId, orderedIds, priorityKey);
         });
       }
 
@@ -4390,24 +4519,21 @@
         navPanel.appendChild(nav);
         frag.appendChild(navPanel);
 
-        // Heute-Fokus — only meaningful while looking at the current week.
+        // Heute-Fokus tasks render inline — highlighted (.task-card.focus)
+        // and pulled to the top — instead of a separate panel. Only
+        // meaningful while looking at the current week.
+        let todayItems = [];
         if (isCurrent) {
-          const focus = focusTasks();
-          const focusPanel = el('section', { className: 'panel' });
-          focusPanel.appendChild(el('div', { className: 'panel-head' }, [
-            el('h2', { text: `Heute im Fokus (${focus.length})` })
-          ]));
-          if (!focus.length) {
-            focusPanel.appendChild(el('div', { className: 'empty', text: 'Noch nichts im Fokus. Markiere unten Aufgaben mit ☆, an denen du heute arbeitest.' }));
-          } else {
-            const list = el('div', { className: 'task-list' });
-            focus.forEach(t => list.appendChild(renderPlannedCard(t, now, { focus: true })));
-            focusPanel.appendChild(list);
-            if (focus.length > FOCUS_SOFT_LIMIT) {
-              focusPanel.appendChild(el('p', { className: 'hint', text: `${focus.length} Aufgaben im Fokus. Mehr als ${FOCUS_SOFT_LIMIT} an einem Tag geht selten aus.` }));
+          todayItems = focusTasks();
+          if (todayItems.length) {
+            const todayList = el('div', { className: 'task-list' });
+            todayItems.forEach(t => todayList.appendChild(renderPlannedCard(t, now, { focus: true })));
+            frag.appendChild(todayList);
+            attachReorder(todayList, null);
+            if (todayItems.length > FOCUS_SOFT_LIMIT) {
+              frag.appendChild(el('p', { className: 'hint', text: `${todayItems.length} Aufgaben im Fokus. Mehr als ${FOCUS_SOFT_LIMIT} an einem Tag geht selten aus.` }));
             }
           }
-          frag.appendChild(focusPanel);
         }
 
         // Leftovers from earlier weeks.
@@ -4442,14 +4568,18 @@
         }
 
         const planned = plannedTasks(ui.weekKey);
+        const todayIds = new Set(todayItems.map(t => t.id));
+        const restPlanned = planned.filter(t => !todayIds.has(t.id));
         const panel = el('section', { className: 'panel' });
         panel.appendChild(el('div', { className: 'panel-head' }, [
           el('h2', { text: `Geplant für ${shortWeek(ui.weekKey)} (${planned.length})` })
         ]));
         if (!planned.length) {
           panel.appendChild(el('div', { className: 'empty', text: 'Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.' }));
+        } else if (restPlanned.length) {
+          renderGroups(panel, restPlanned, (t, n) => renderPlannedCard(t, n), now, { reorderable: true });
         } else {
-          renderGroups(panel, planned, (t, n) => renderPlannedCard(t, n), now);
+          panel.appendChild(el('div', { className: 'empty', text: 'Alle Aufgaben dieser Woche sind aktuell im Heute-Fokus markiert.' }));
         }
         frag.appendChild(panel);
         return frag;

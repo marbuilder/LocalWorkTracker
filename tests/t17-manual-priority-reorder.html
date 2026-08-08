@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T17 manual priority reorder</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T17 Manual Priority Reorder</h1>
+  <p>Exercises the <code>orderKey</code> field added for manual drag&amp;drop task reordering: normalization defaults legacy records to a sane ordering, <code>byPriority</code> sorts by priority bucket then <code>orderKey</code>, and <code>reorderTask</code> renumbers a peer list and optionally reassigns priority on a cross-group drop.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      'use strict';
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      const PRIORITIES = [
+        { key: 'zero', label: 'Zero-Tolerance', order: 0 },
+        { key: 'eighty', label: '80-80', order: 1 },
+        { key: 'nice', label: 'Nice-to-have', order: 2 }
+      ];
+      const priorityOrder = key => {
+        const found = PRIORITIES.find(p => p.key === key);
+        return found ? found.order : PRIORITIES.length;
+      };
+
+      // Mirrors the orderKey defaulting in normalizeTask() in index.html's task module.
+      function normalizeTask(t) {
+        const updatedAt = Number.isFinite(Number(t.updatedAt)) ? Number(t.updatedAt) : 0;
+        const orderKey = Number.isFinite(Number(t.orderKey)) ? Number(t.orderKey) : -updatedAt;
+        return {
+          id: t.id,
+          priority: t.priority,
+          todayFlag: Boolean(t.todayFlag),
+          orderKey,
+          updatedAt
+        };
+      }
+
+      // Mirrors byPriority in index.html's task module.
+      const byPriority = (a, b) => priorityOrder(a.priority) - priorityOrder(b.priority) || a.orderKey - b.orderKey || b.updatedAt - a.updatedAt;
+
+      // Mirrors reorderTask() in index.html's task module, operating on a plain array.
+      function reorderTask(tasks, taskId, orderedIds, priorityKey) {
+        const findTask = id => tasks.find(t => t.id === id);
+        const task = findTask(taskId);
+        if (!task) return;
+        if (priorityKey != null && task.priority !== priorityKey) {
+          task.priority = priorityKey;
+        }
+        orderedIds.forEach((id, idx) => {
+          const t = findTask(id);
+          if (t) t.orderKey = idx;
+        });
+      }
+
+      // --- 1. Legacy tasks without orderKey get a sane default ordering ---
+      const legacyA = normalizeTask({ id: 'a', priority: 'eighty', updatedAt: 1000 });
+      const legacyB = normalizeTask({ id: 'b', priority: 'eighty', updatedAt: 2000 });
+      assert(
+        'a legacy task without orderKey defaults to -updatedAt',
+        legacyA.orderKey === -1000 && legacyB.orderKey === -2000,
+        { a: legacyA.orderKey, b: legacyB.orderKey }
+      );
+      assert(
+        'legacy default ordering reproduces "most recently touched first" within a bucket',
+        [legacyB, legacyA].sort(byPriority).map(t => t.id).join(',') === 'b,a'
+      );
+      assert(
+        'an explicit orderKey is kept as-is instead of being defaulted',
+        normalizeTask({ id: 'c', priority: 'eighty', updatedAt: 1000, orderKey: 7 }).orderKey === 7
+      );
+
+      // --- 2. Reordering within a priority bucket ---
+      const tasks = [
+        normalizeTask({ id: 't1', priority: 'eighty', updatedAt: 100, orderKey: 0 }),
+        normalizeTask({ id: 't2', priority: 'eighty', updatedAt: 100, orderKey: 1 }),
+        normalizeTask({ id: 't3', priority: 'eighty', updatedAt: 100, orderKey: 2 })
+      ];
+      // Drag t3 to the front of its own bucket.
+      reorderTask(tasks, 't3', ['t3', 't1', 't2'], null);
+      assert(
+        'reordering within a bucket updates orderKey to match the drop position',
+        tasks.find(t => t.id === 't3').orderKey === 0 &&
+        tasks.find(t => t.id === 't1').orderKey === 1 &&
+        tasks.find(t => t.id === 't2').orderKey === 2
+      );
+      assert(
+        'the resulting sort order reflects the new orderKey values',
+        [...tasks].sort(byPriority).map(t => t.id).join(',') === 't3,t1,t2'
+      );
+
+      // --- 3. Dropping into a different priority group updates priority + orderKey ---
+      const t4 = normalizeTask({ id: 't4', priority: 'nice', updatedAt: 100, orderKey: 0 });
+      const crossGroupTasks = [...tasks, t4];
+      reorderTask(crossGroupTasks, 't4', ['t3', 't4', 't1', 't2'], 'eighty');
+      assert(
+        'dropping into another priority group reassigns the dragged task\'s priority',
+        crossGroupTasks.find(t => t.id === 't4').priority === 'eighty'
+      );
+      assert(
+        'the cross-group drop also renumbers orderKey for the whole target bucket',
+        crossGroupTasks.find(t => t.id === 't3').orderKey === 0 &&
+        crossGroupTasks.find(t => t.id === 't4').orderKey === 1 &&
+        crossGroupTasks.find(t => t.id === 't1').orderKey === 2 &&
+        crossGroupTasks.find(t => t.id === 't2').orderKey === 3
+      );
+
+      const tbody = document.getElementById('results');
+      let allPass = true;
+      results.forEach(r => {
+        if (!r.pass) allPass = false;
+        const tr = document.createElement('tr');
+        const c1 = document.createElement('td'); c1.textContent = r.name;
+        const c2 = document.createElement('td'); c2.textContent = r.pass ? 'PASS' : 'FAIL'; c2.className = r.pass ? 'pass' : 'fail';
+        const c3 = document.createElement('td'); c3.textContent = r.details;
+        tr.append(c1, c2, c3);
+        tbody.appendChild(tr);
+      });
+      document.getElementById('status').textContent = allPass
+        ? `All ${results.length} checks passed.`
+        : `${results.filter(r => !r.pass).length} of ${results.length} checks failed.`;
+      document.getElementById('status').className = allPass ? 'pass' : 'fail';
+    })();
+  </script>
+</body>
+</html>
