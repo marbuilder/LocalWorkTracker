@@ -251,19 +251,26 @@
     }
     .current-row {
       display: grid;
-      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      grid-template-columns: 1fr 1fr;
       gap: 12px;
+      align-items: start;
     }
     .current-side { display: flex; flex-direction: column; gap: 12px; }
-    .current-expanded {
+    .current-compact {
       flex-direction: column; align-items: stretch; justify-content: flex-start;
-      gap: 10px;
     }
+    .current-info { display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .current-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    .current-controls { display: flex; flex-direction: column; gap: 8px; }
-    .current-controls .field-label-row { margin-top: 2px; }
-    .current-notes-toggle summary { font-size: 13px; }
-    .current-toolbar { margin-top: 2px; }
+    .current-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .ticket-input-compact { width: auto; flex: 1 1 140px; min-width: 120px; min-height: 36px; padding: 6px 10px; font-size: 14px; }
+    .ticket-preset-compact { width: auto; max-width: 120px; min-height: 36px; padding: 6px 8px; font-size: 13px; }
+    .time-input-compact { width: auto; min-width: 90px; min-height: 36px; padding: 6px 8px; font-size: 13px; }
+    .current-notes-popover summary, .current-time-info summary { width: 22px; height: 22px; font-size: 13px; }
+    .current-notes-tip { min-width: 220px; }
+    .current-notes-tip label { margin-bottom: 4px; }
+    .current-notes-tip textarea { min-height: 70px; }
+    .current-toolbar-compact { margin: 0; gap: 6px; }
+    .icon-btn { width: auto; min-height: 36px; padding: 6px 12px; font-size: 15px; line-height: 1; }
     .pomodoro-bar { flex-wrap: wrap; }
     .pomodoro-count { min-width: 168px; text-align: right; }
     .pomodoro-info { display: flex; flex-direction: column; gap: 8px; }
@@ -885,18 +892,23 @@
     <div id="task-backupBanner" hidden></div>
 
     <div class="current-row">
-      <div id="currentTimer" class="current current-expanded sticky-bar" aria-live="polite">
-        <div id="currentTimerStatus" class="current-status"></div>
-        <div class="current-controls">
-          <div class="ticket-row">
-            <input id="ticketNumber" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
-            <select id="ticketNumberPreset" aria-label="Gespeichertes Ticket auswählen">
+      <div id="currentTimer" class="current current-compact sticky-bar" aria-live="polite">
+        <div class="current-info">
+          <div id="currentTimerStatus" class="current-status"></div>
+          <div class="current-controls">
+            <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr." autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+            <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
               <option value="">Vorauswahl…</option>
             </select>
-          </div>
-          <div class="field-label-row">
-            <label for="timerStartTime">Uhrzeit (optional, heute)</label>
-            <details class="field-info">
+            <input id="timerStartTime" type="time" class="time-input-compact" step="60" aria-label="Uhrzeit (optional, heute)" placeholder="Zeit">
+            <details class="field-info current-notes-popover" data-ui-key="timerNotes">
+              <summary aria-label="Notiz hinzufügen" title="Notiz">📝</summary>
+              <div class="field-info-tip current-notes-tip">
+                <label for="taskNotes">Notiz</label>
+                <textarea id="taskNotes" placeholder="Optional"></textarea>
+              </div>
+            </details>
+            <details class="field-info current-time-info">
               <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
               <div class="field-info-tip">
                 <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
@@ -905,18 +917,11 @@
                 <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
               </div>
             </details>
-          </div>
-          <input id="timerStartTime" type="time" step="60" placeholder="Aktuelle Zeit">
-          <details class="compact-menu current-notes-toggle" data-ui-key="timerNotes">
-            <summary>+ Notiz</summary>
-            <div class="compact-inner">
-              <textarea id="taskNotes" placeholder="Optional"></textarea>
+            <div class="toolbar current-toolbar-compact">
+              <button id="startBtn" class="good icon-btn" title="Start" aria-label="Timer starten">▶</button>
+              <button id="stopBtn" class="warn icon-btn" title="Stop" aria-label="Timer stoppen">⏹</button>
+              <button id="resetFormBtn" class="ghost icon-btn" title="Felder leeren" aria-label="Felder leeren">↺</button>
             </div>
-          </details>
-          <div class="toolbar current-toolbar">
-            <button id="startBtn" class="good">Start</button>
-            <button id="stopBtn" class="warn">Stop</button>
-            <button id="resetFormBtn" class="ghost" title="Felder leeren" aria-label="Felder leeren">Felder leeren</button>
           </div>
         </div>
       </div>
