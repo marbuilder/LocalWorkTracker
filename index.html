@@ -301,6 +301,12 @@
       color: #ffd699;
       border-color: rgba(255,176,32,.4);
     }
+    #pomodoroPill, #currentTimerStatus .pill:not(.pending) {
+      background: rgba(48,196,141,.15); color: #b8f0d8; border-color: rgba(48,196,141,.35);
+    }
+    body[data-theme="light"] #pomodoroPill, body[data-theme="light"] #currentTimerStatus .pill:not(.pending) {
+      background: rgba(19,108,75,.12); color: #0e6a48; border-color: rgba(19,108,75,.45);
+    }
     body[data-theme="light"] .pill.pending {
       background: rgba(178,113,0,.12);
       color: #8a5a00;
