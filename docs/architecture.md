@@ -26,6 +26,7 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Feature | Key functions | Module |
 |---|---|---|
 | Posteingang (inbox capture) | `renderInboxView`, `captureTask`, `inboxTasks` | TaskModule |
+| Globale Schnellerfassung (Sticky-Bar, sichtbar auf jedem Tab) | `doQuickCapture` (AppShell) calling `LWT.tasks.captureTask(title)` (thin wrapper around the private `captureTask`, then `render()`) | AppShell + TaskModule |
 | Triage (priority/effort) | `changePriority`, `changeEffort`, `chipRow` | TaskModule |
 | Woche (weekly planning) | `renderWeekView`, `plannedTasks`, `leftoverTasks`, `renderGroups`, `groupByPriority` | TaskModule |
 | Heute im Fokus (inline highlight within Woche/Geplant, plus a priority-sorted duplicate panel above the weekly groups for the current week) | `toggleToday`, `focusTasks` (priority-sorted source for both), `renderWeekView` (renders the dedicated panel via `renderGroups`/`renderPlannedCard` with `{ draggable: false }`, current week only), `renderPlannedCard` (highlight driven by `task.todayFlag` directly, not an opts flag; `draggable` opts flag disables drag&drop for the duplicate panel; the compact ▶ Timer-starten icon button shows on every planned card regardless of `todayFlag`) | TaskModule |
@@ -65,7 +66,8 @@ window.LWT = {
     getExportPayload(), exportJson(), exportCsv(),  // exportJson() IS the combined backup — see below
     importPayload(parsed), clearAllData(),
     isBackupDue(), daysSinceLastBackup(), setBackupInterval(days), getBackupStatus(), runBackup(manual),
-    getTaskCount()
+    getTaskCount(),
+    captureTask(title)                              // creates an inbox task + re-renders TaskModule's own view; used by AppShell's global quick-capture widget in the sticky bar
   },
   shell: {
     switchTab(name)  // 'time' | 'tasks' | 'daten'
@@ -98,7 +100,11 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
   <div class="container">
     <header class="app-head">                 -- title, #themeToggleBtn, #shortcutHelp (Zeit-only keyboard-shortcut popover, right of the theme toggle) (AppShell-owned)
     <div id="task-backupBanner" hidden>        -- rendered by TaskModule, placed in the header so it's visible from either tab
-    <div class="current-row">                  -- sticky bar: #currentTimer + #pomodoroBar (TimeModule-owned, unchanged markup/JS from LocalTimetracker)
+    <div class="current-row">                  -- sticky bar, always visible on every main tab
+      <div id="currentTimer">                  -- TimeModule-owned; static shell holding #currentTimerStatus (live-rendered by renderCurrentTimer()) plus the former "Timer starten" panel's controls, now laid out as three rows — status on top, `#ticketNumber`/`#ticketNumberPreset` on their own full-width `.ticket-row` (so a typed ticket number is never text-clipped by competing for space with the other fields), then one flex-wrapping controls row below (`.current-controls`: `#timerStartTime`, notes, time-info, buttons) — stretched with `justify-content: space-between` (see "CSS" below) to fill exactly the combined height of `#pomodoroBar` + `#quickCapture` next to it on desktop widths (>1050px): #timerStartTime (label dropped, `aria-label` only), #taskNotes inside a `<details class="field-info current-notes-popover" data-ui-key="timerNotes">` — a text button "Notiz", not an icon (reuses the `.field-info` floating-popover pattern instead of a block `.compact-menu`, so opening it never changes the box's height), the (i) time-usage hint (also `.field-info`), and #startBtn/#stopBtn/#resetFormBtn as normal text buttons ("Start"/"Stop"/"Leeren", sized to match `.pomodoro-buttons button`) — moved here verbatim, "Timer starten" panel removed from the Zeit tab
+      <div class="current-side">               -- AppShell-owned wrapper, stacks the following two:
+        <div id="pomodoroBar">                 -- TimeModule-owned, unchanged markup/JS from LocalTimetracker
+        <div id="quickCapture">                 -- AppShell-owned; #quickCaptureInput + #quickCaptureBtn, calls LWT.tasks.captureTask(title) (no tab switch, no dialog)
     <nav id="mainTabbar">                      -- 3 buttons, data-main-tab="time"|"tasks"|"daten" (AppShell-owned)
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
@@ -117,7 +123,9 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
 </body>
 ```
 
-**Why `#currentTimer`/`#pomodoroBar` "just work" in the sticky bar:** their markup and all of TimeModule's rendering code (`renderCurrentTimer()`, `renderPomodoro()`, the `setInterval` tick) are untouched from LocalTimetracker — only their *position* in the DOM moved (out of the Zeit-tab-only content, up into the always-visible header area). `getElementById` doesn't care where in the document a node lives, so no JS changed for this.
+**Why `#pomodoroBar` "just works" in the sticky bar:** its markup and all of TimeModule's rendering code (`renderPomodoro()`, the `setInterval` tick) are untouched from LocalTimetracker — only its *position* in the DOM moved (out of the Zeit-tab-only content, up into the always-visible header area). `getElementById` doesn't care where in the document a node lives, so no JS changed for this.
+
+**`#currentTimer` is different — it's a split static shell + dynamic sub-node, not a plain relocation.** `renderCurrentTimer()` used to replace `#currentTimer`'s *entire* `innerHTML` on every render, including every `setInterval` tick (once a second while a timer runs). Once the former "Timer starten" panel's form controls (`#ticketNumber`, `#timerStartTime`, `#taskNotes`, `#startBtn`/`#stopBtn`/`#resetFormBtn`) were folded into `#currentTimer` so the whole timer UI is reachable from the sticky bar, those controls could no longer live inside the node `renderCurrentTimer()` wholesale-replaces — doing so would destroy in-progress typing/focus and the `dom.*` cache references every second. So `#currentTimer` now holds the form controls as **static markup, written once in HTML and never touched by `innerHTML`**, plus a child `#currentTimerStatus` node that `renderCurrentTimer()` still rebuilds exactly as before (same `.pill`/`.live-duration` markup) — only the target changed from `dom.currentTimer` to `dom.currentTimerStatus`. `bindElements()` caches both ids; nothing else about the function's logic or its callers changed.
 
 ### Renamed ids (collision avoidance)
 
@@ -143,7 +151,13 @@ One `<style>` block (lines 8–809): LocalTimetracker's stylesheet (has the char
 
 Spacing between boxes is driven by two custom properties defined in **both** `:root` blocks (so Time and Task stay pixel-identical): `--gap-outer` (24px — `.container`, `.app-head`, `.grid`, `#viewRoot`, the space between panels) and `--gap-inner` (16px — `.row`, `.stats`, `.filter-row`, `.task-list`, `.task-main`, `.dialog-body`, the space inside a panel). Add new panel-to-panel or inside-panel gaps to the matching variable rather than a new hardcoded value.
 
-Breakpoints unchanged: `1050px` (two-column grids collapse), `700px` (mobile — stacks `.current-row`, makes tables card-like). Light theme via `body[data-theme="light"]`, toggled by AppShell only — neither module has its own theme code anymore (see below).
+Breakpoints: `1050px` (two-column grids collapse, incl. `.current-row`, for narrow viewports), `700px` (mobile — makes tables card-like, and `.current-controls`'s flex-wrap breaks the timer's compact control row onto a second line). Light theme via `body[data-theme="light"]`, toggled by AppShell only — neither module has its own theme code anymore (see below).
+
+The sticky bar's right column (`.current-side`, AppShell-owned) stacks `#pomodoroBar` and `#quickCapture` vertically with its own `justify-content: space-between`; `#quickCapture` reuses TaskModule's `.capture-row` grid pattern (input + button) unchanged. `.current-row` uses CSS Grid's default `align-items: stretch`, so `#currentTimer` is stretched to match `.current-side`'s combined (Pomodoro + Schnellerfassung) height on desktop widths — `.current-compact` (on `#currentTimer`) is `display:flex; flex-direction:column; justify-content:space-between;`, so the status row and the controls row are pushed to the top/bottom of that stretched height, the gap between them growing to fill it evenly rather than leaving dead space at the bottom. `.current-side`'s own `justify-content: space-between` matters because `renderCurrentTimer()`'s active-state markup can be taller than its idle-state markup (a running timer originally rendered ticket/start-time as extra stacked lines) — without it, a taller `#currentTimer` would grow the shared grid row, and `.current-side`'s un-stretched children (Pomodoro + Schnellerfassung, ~178px combined) would leave dead space at the *top* of the grid row's height instead of filling it, so `#quickCapture`'s bottom edge would sit above `#currentTimer`'s — that mismatch is what `justify-content: space-between` on `.current-side` prevents, symmetric to the same fix on `.current-compact`. Below the `1050px` breakpoint `.current-row` collapses to one column, so nothing is stretched there and `justify-content:space-between` has no visible effect on either side (both boxes just size to their natural content height).
+
+`renderCurrentTimer()`'s active-state markup puts the `.pill` ("● Aktiv"/"● Geplant") and the ticket name on the same flex row (`display:flex; gap:8px` inline style), with the start-time line below — mirroring the idle state's two-line shape ("Kein aktiver Timer" + subtitle) so switching between idle/active doesn't change `#currentTimerStatus`'s height and doesn't stress the `.current-side` height-matching described above.
+
+The timer's `#currentTimer` control row (`.current-controls`) is a flex-wrap row with compact fields (`.ticket-input-compact`, `.ticket-preset-compact`, `.time-input-compact` — narrower than the app's default `input`/`select` sizing) plus normal text buttons: the `#timerStartTime` input (no visible label, `aria-label` only — matches Pomodoro's own label-less duration `<select>`), a "Notiz" text button and the existing (i) time-usage hint, and `#startBtn`/`#stopBtn`/`#resetFormBtn` sized to match `.pomodoro-buttons button` (`min-height:36px`) so Start/Stop look visually identical to the Pomodoro timer's own Start/Stop. The notes field reuses `.field-info`'s floating-popover `<details>` pattern (the same one the (i) time-usage hint uses, restyled from a circular icon to a small text-button pill via `.current-notes-popover summary`) — **not** `.compact-menu` — specifically so opening it never changes `#currentTimer`'s box height, which a block-level `.compact-menu` expansion would (and which would, via the grid-stretch mechanism above, also perturb `.current-side`'s layout).
 
 ## Theming — owned exclusively by AppShell
 
@@ -180,6 +194,6 @@ The boot script's `LEGACY_MAP` is a flat list of `[oldKey, newKey]` pairs, copie
 
 - **Touching only Zeit-tab behavior?** Stay inside the TimeModule script block. Its internals (`state`, `dom`, all the `render*` functions) are private — the only way out is adding to the `window.LWT.time = {...}` object near the top of the module (right after the boot `setInterval`).
 - **Touching only Aufgaben-tab behavior?** Stay inside the TaskModule script block, same pattern — extend `window.LWT.tasks = {...}` near its `init()` call at the bottom.
-- **Touching the sticky bar, tab switching, or the Daten tab?** That's AppShell — the last script block, plain functions (not wrapped in as many closures as the modules, since there's less of it).
+- **Touching the sticky bar, tab switching, or the Daten tab?** That's mostly AppShell — the last script block, plain functions (not wrapped in as many closures as the modules, since there's less of it). Exception: `#currentTimer`'s form controls and `renderCurrentTimer()`/`renderPomodoro()` are still TimeModule's — the sticky bar isn't purely an AppShell concern, it now has an AppShell-owned sibling (`#quickCapture`) sitting next to TimeModule-owned content (`#currentTimer`, `#pomodoroBar`).
 - **Adding a new cross-module feature?** Add a method to the relevant module's `window.LWT.*` object first, then consume it from the other module or from AppShell. Don't add a fifth script block or a new global unless it's genuinely shell-level (tab/theme/Daten), matching what AppShell already owns.
 - **Renaming or removing a DOM id?** Check the table above first — an id that looks unique might be intentionally shared (`#toastRoot`, `#themeToggleBtn`) or intentionally split (`task-viewRoot` vs the old `viewRoot`).

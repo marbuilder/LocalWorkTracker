@@ -4,7 +4,7 @@
 
 **LocalWorkTracker** — a fully client-side personal work companion that merges two prior single-file apps, **LocalTasks** (personal task management below the company ticket system) and **LocalTimetracker** (time tracking), into one app. The user-facing UI is in German.
 
-A sticky bar at the top always shows the live timer and the Pomodoro timer, regardless of which of the two main tabs is active:
+A sticky bar at the top always shows the live timer (now including full start/stop controls — ticket selection, optional start time, collapsible notes), the Pomodoro timer, and a global quick-capture field for new tasks, regardless of which of the two main tabs is active. Quick-capturing a task never switches tabs — the task is created in the background (status `inbox`) and a toast confirms it.
 
 - **Zeit** — the former LocalTimetracker: start/stop a timer, log manual entries, filter/analyze, Pomodoro, ticket presets, snapshots.
 - **Aufgaben** — the former LocalTasks: Posteingang (inbox capture) → Triage (priority/effort) → Woche (weekly planning + "Heute" focus list) → Archiv, with the same two guardrails as before (quick wins pushed to "just do it now"; anything bigger than half a day is escalated to the company system, never scheduled here).
@@ -34,7 +34,7 @@ Each module keeps its own internal state, storage keys, and rendering — they d
 
 **`window.LWT` surface:**
 - `LWT.time.getActiveTimer()`, `LWT.time.startTimerFromTask(taskId, ticketLabel, notes)`, `LWT.time.getTrackedMinutesLabel(taskId)`, `LWT.time.getExportPayload()`, `LWT.time.exportCsv()`, `LWT.time.importPayload(parsed)`, `LWT.time.clearAllData()`, `LWT.time.refreshChartTheme()`.
-- `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`.
+- `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`, `LWT.tasks.captureTask(title)` (used by AppShell's global sticky-bar quick-capture widget).
 - `LWT.shell.switchTab(name)` — `'time'`, `'tasks'`, or `'daten'`.
 
 When adding to either module, prefer extending this surface over reaching into the other module's internals directly.
