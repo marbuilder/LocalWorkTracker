@@ -80,6 +80,7 @@
     h1, h2, h3 { margin: 0 0 12px; }
     p { color: var(--muted); }
     .grid { display: grid; gap: var(--gap-outer); grid-template-columns: 1fr 1fr; }
+    .grid .span-all { grid-column: 1 / -1; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
@@ -250,14 +251,25 @@
     }
     .current-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
       gap: 12px;
     }
+    .current-side { display: flex; flex-direction: column; gap: 12px; }
+    .current-expanded {
+      flex-direction: column; align-items: stretch; justify-content: flex-start;
+      gap: 10px;
+    }
+    .current-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .current-controls { display: flex; flex-direction: column; gap: 8px; }
+    .current-controls .field-label-row { margin-top: 2px; }
+    .current-notes-toggle summary { font-size: 13px; }
+    .current-toolbar { margin-top: 2px; }
     .pomodoro-bar { flex-wrap: wrap; }
     .pomodoro-count { min-width: 168px; text-align: right; }
     .pomodoro-info { display: flex; flex-direction: column; gap: 8px; }
     .pomodoro-controls { display: flex; gap: 8px; align-items: center; }
     .pomodoro-controls select { width: auto; min-height: 36px; }
+    .quick-capture .capture-row { grid-template-columns: minmax(0, 1fr) minmax(0, 110px); }
     .pomodoro-buttons { display: flex; gap: 8px; }
     .pomodoro-buttons button { width: auto; min-height: 36px; }
     .pomodoro-controls select:disabled,
@@ -416,6 +428,7 @@
       .grid { grid-template-columns: 1fr; }
       .stats { grid-template-columns: repeat(2, 1fr); }
       .day-nav { grid-template-columns: repeat(2, 1fr); }
+      .current-row { grid-template-columns: 1fr; }
     }
     @media (max-width: 700px) {
       .row { grid-template-columns: 1fr; }
@@ -872,28 +885,70 @@
     <div id="task-backupBanner" hidden></div>
 
     <div class="current-row">
-      <div id="currentTimer" class="current sticky-bar" aria-live="polite"></div>
-      <div id="pomodoroBar" class="current pomodoro-bar sticky-bar" aria-live="polite">
-        <div class="pomodoro-info">
-          <div class="pill" id="pomodoroPill">⏱ Pomodoro bereit</div>
-          <div class="pomodoro-controls">
-            <select id="pomodoroDuration" aria-label="Pomodoro-Dauer wählen">
-              <option value="5">5 Min.</option>
-              <option value="15">15 Min.</option>
-              <option value="25" selected>25 Min.</option>
-              <option value="30">30 Min.</option>
-              <option value="45">45 Min.</option>
-              <option value="60">60 Min.</option>
+      <div id="currentTimer" class="current current-expanded sticky-bar" aria-live="polite">
+        <div id="currentTimerStatus" class="current-status"></div>
+        <div class="current-controls">
+          <div class="ticket-row">
+            <input id="ticketNumber" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+            <select id="ticketNumberPreset" aria-label="Gespeichertes Ticket auswählen">
+              <option value="">Vorauswahl…</option>
             </select>
-            <div class="pomodoro-buttons">
-              <button id="pomodoroStartBtn" class="good" type="button">Start</button>
-              <button id="pomodoroStopBtn" class="warn" type="button">Stop</button>
+          </div>
+          <div class="field-label-row">
+            <label for="timerStartTime">Uhrzeit (optional, heute)</label>
+            <details class="field-info">
+              <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
+              <div class="field-info-tip">
+                <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
+                <b>Beim Start ausgefüllt</b><br>Setzt die Startzeit; Feld leert sich danach automatisch.<br><br>
+                <b>Beim Stop ausgefüllt</b><br>Setzt die Endzeit des laufenden Timers.<br><br>
+                <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
+              </div>
+            </details>
+          </div>
+          <input id="timerStartTime" type="time" step="60" placeholder="Aktuelle Zeit">
+          <details class="compact-menu current-notes-toggle" data-ui-key="timerNotes">
+            <summary>+ Notiz</summary>
+            <div class="compact-inner">
+              <textarea id="taskNotes" placeholder="Optional"></textarea>
             </div>
+          </details>
+          <div class="toolbar current-toolbar">
+            <button id="startBtn" class="good">Start</button>
+            <button id="stopBtn" class="warn">Stop</button>
+            <button id="resetFormBtn" class="ghost" title="Felder leeren" aria-label="Felder leeren">Felder leeren</button>
           </div>
         </div>
-        <div class="pomodoro-count">
-          <div class="live-duration" id="pomodoroDisplay">25:00</div>
-          <div class="muted" id="pomodoroSubtitle">Bereit</div>
+      </div>
+      <div class="current-side">
+        <div id="pomodoroBar" class="current pomodoro-bar sticky-bar" aria-live="polite">
+          <div class="pomodoro-info">
+            <div class="pill" id="pomodoroPill">⏱ Pomodoro bereit</div>
+            <div class="pomodoro-controls">
+              <select id="pomodoroDuration" aria-label="Pomodoro-Dauer wählen">
+                <option value="5">5 Min.</option>
+                <option value="15">15 Min.</option>
+                <option value="25" selected>25 Min.</option>
+                <option value="30">30 Min.</option>
+                <option value="45">45 Min.</option>
+                <option value="60">60 Min.</option>
+              </select>
+              <div class="pomodoro-buttons">
+                <button id="pomodoroStartBtn" class="good" type="button">Start</button>
+                <button id="pomodoroStopBtn" class="warn" type="button">Stop</button>
+              </div>
+            </div>
+          </div>
+          <div class="pomodoro-count">
+            <div class="live-duration" id="pomodoroDisplay">25:00</div>
+            <div class="muted" id="pomodoroSubtitle">Bereit</div>
+          </div>
+        </div>
+        <div id="quickCapture" class="current quick-capture sticky-bar" aria-live="polite">
+          <div class="capture-row">
+            <input id="quickCaptureInput" type="text" placeholder="Was ist dir aufgefallen?" autocomplete="off" maxlength="120">
+            <button id="quickCaptureBtn" class="primary">Erfassen</button>
+          </div>
         </div>
       </div>
     </div>
@@ -909,51 +964,7 @@
       <div class="stats" id="stats"></div>
 
     <div class="grid">
-      <section class="panel">
-        <h2>Timer starten</h2>
-        <div class="row">
-          <div class="field s12">
-            <label for="ticketNumber">Ticket-Nr. *</label>
-            <div class="ticket-row">
-              <input id="ticketNumber" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
-              <select id="ticketNumberPreset" aria-label="Gespeichertes Ticket auswählen">
-                <option value="">Vorauswahl…</option>
-              </select>
-            </div>
-            <div class="ticket-help">Frei eingeben oder aus der Vorauswahl-Liste wählen. Autocomplete ist zusätzlich aktiv.</div>
-          </div>
-        </div>
-        <div class="row">
-          <div class="field s6">
-            <div class="field-label-row">
-              <label for="timerStartTime">Uhrzeit (optional, heute)</label>
-              <details class="field-info">
-                <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
-                <div class="field-info-tip">
-                  <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
-                  <b>Beim Start ausgefüllt</b><br>Setzt die Startzeit; Feld leert sich danach automatisch.<br><br>
-                  <b>Beim Stop ausgefüllt</b><br>Setzt die Endzeit des laufenden Timers.<br><br>
-                  <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
-                </div>
-              </details>
-            </div>
-            <input id="timerStartTime" type="time" step="60" placeholder="Aktuelle Zeit">
-          </div>
-        </div>
-        <div class="row">
-          <div class="field s12">
-            <label for="taskNotes">Notizen</label>
-            <textarea id="taskNotes" placeholder="Optional"></textarea>
-          </div>
-        </div>
-        <div class="toolbar">
-          <button id="startBtn" class="good">Start</button>
-          <button id="stopBtn" class="warn">Stop</button>
-          <button id="resetFormBtn" class="ghost">Felder leeren</button>
-        </div>
-      </section>
-
-      <section class="panel">
+      <section class="panel span-all">
         <h2>Manuellen Eintrag anlegen</h2>
         <div class="row">
           <div class="field s12">
@@ -1718,7 +1729,7 @@
           'presetTicketInput','addPresetTicketBtn','presetListContainer','exportTicketsBtn','importTicketsBtn','importTicketsFile',
           'createSnapshotBtn','snapshotListContainer',
           'pomodoroBar','pomodoroPill','pomodoroDisplay','pomodoroSubtitle','pomodoroDuration','pomodoroStartBtn','pomodoroStopBtn',
-          'currentTimer','stats','summaryContainer','entriesContainer','summaryChart','chartSubtitle','chartTooltip',
+          'currentTimer','currentTimerStatus','stats','summaryContainer','entriesContainer','summaryChart','chartSubtitle','chartTooltip',
           'editId','editTicket','editTicketPreset','editDate','editStart','editEnd','editPause','editNotes','cancelEditBtn','saveEditBtn',
           'confirmDialogTitle','confirmDialogMessage','confirmDialogActions','toastRoot'
         ].forEach(id => dom[id] = qs(id));
@@ -2457,18 +2468,18 @@
 
       function renderCurrentTimer() {
         if (!state.activeTimer) {
-          dom.currentTimer.innerHTML = '<div><strong>Kein aktiver Timer</strong><div class="muted">Starte oben einen Timer oder lege manuell einen Eintrag an.</div></div><div class="muted">⏱ bereit</div>';
+          dom.currentTimerStatus.innerHTML = '<div><strong>Kein aktiver Timer</strong><div class="muted">Ticket eingeben und starten.</div></div><div class="muted">⏱ bereit</div>';
           return;
         }
         const a = state.activeTimer;
         const elapsedMs = Date.now() - a.startTs;
         const isPending = elapsedMs < 0;
-        dom.currentTimer.innerHTML = '';
+        dom.currentTimerStatus.innerHTML = '';
         const left = document.createElement('div');
         left.innerHTML = `<div class="pill${isPending ? ' pending' : ''}">${isPending ? '● Geplant' : '● Aktiv'}</div><div style="margin-top:8px;"><strong>${escapeHtml(a.ticket || '—')}</strong></div><div class="muted">Start: ${formatDateTime(a.startTs)}</div>`;
         const right = document.createElement('div');
         right.innerHTML = `<div class="live-duration">${isPending ? '-' : ''}${formatDuration(Math.abs(elapsedMs))}</div><div class="muted">${isPending ? 'Beginnt in' : 'Live-Laufzeit'}</div>`;
-        dom.currentTimer.append(left, right);
+        dom.currentTimerStatus.append(left, right);
       }
 
       function renderStats() {
@@ -4864,7 +4875,12 @@
         setBackupInterval,
         getBackupStatus: () => ({ lastBackupDate: state.lastBackupDate, backupIntervalDays: state.backupIntervalDays }),
         runBackup,
-        getTaskCount: () => state.tasks.length
+        getTaskCount: () => state.tasks.length,
+        captureTask: function (title) {
+          const task = captureTask(title);
+          if (task) render();
+          return task;
+        }
       };
 
       init();
@@ -4953,6 +4969,24 @@
       var savedTab = 'time';
       try { savedTab = localStorage.getItem('local-work-tracker-v1-ui-active-tab') || 'time'; } catch (err) { /* ignore */ }
       switchTab(panels[savedTab] ? savedTab : 'time');
+
+      /* ── Global quick capture (sticky bar) ──────────────────── */
+      var quickCaptureInput = qs('quickCaptureInput');
+      var quickCaptureBtn = qs('quickCaptureBtn');
+      function doQuickCapture() {
+        if (!window.LWT.tasks || typeof window.LWT.tasks.captureTask !== 'function' || !quickCaptureInput) return;
+        var task = window.LWT.tasks.captureTask(quickCaptureInput.value);
+        if (!task) { quickCaptureInput.focus(); return; }
+        quickCaptureInput.value = '';
+        showToast('„' + task.title + '“ erfasst.', { variant: 'good' });
+        quickCaptureInput.focus();
+      }
+      if (quickCaptureBtn) quickCaptureBtn.addEventListener('click', doQuickCapture);
+      if (quickCaptureInput) {
+        quickCaptureInput.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { ev.preventDefault(); doQuickCapture(); }
+        });
+      }
 
       /* ── Daten tab wiring ───────────────────────────────────── */
       var lastBackupInfo = qs('lastBackupInfo');
