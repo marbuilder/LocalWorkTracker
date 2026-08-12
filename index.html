@@ -4310,10 +4310,11 @@
           onClick: () => toggleToday(task.id)
         });
         actions.appendChild(star);
-        if (task.todayFlag && window.LWT && window.LWT.time) {
-          actions.appendChild(button('▶ Timer starten', {
-            className: 'primary',
+        if (window.LWT && window.LWT.time) {
+          actions.appendChild(button('▶', {
+            className: 'primary reorder-btn',
             title: 'Timer für diese Aufgabe starten',
+            attrs: { 'aria-label': 'Timer für diese Aufgabe starten' },
             onClick: () => {
               window.LWT.time.startTimerFromTask(task.id, task.externalRef || task.title, '');
               if (window.LWT.shell) window.LWT.shell.switchTab('time');
