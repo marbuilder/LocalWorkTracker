@@ -26,16 +26,16 @@ The two areas are linked: a time entry may carry an optional `taskId` back to a 
 1. **Boot** — runs the one-time legacy-storage migration (see below) and applies the persisted/preferred theme to `<body>` before anything renders, to avoid a flash of the wrong theme.
 2. **TimeModule** — the former LocalTimetracker script, close to verbatim. Defines `window.LWT.time` as its public surface for the shell and TaskModule.
 3. **TaskModule** — the former LocalTasks script, close to verbatim. Defines `window.LWT.tasks`. Loads after TimeModule so it can safely read `window.LWT.time` while rendering (tracked-minutes pill, ticket-to-task resolution).
-4. **AppShell** — new glue code only: main-tab switching (Zeit/Aufgaben), the unified theme toggle, and the combined "Daten" menu (backup/export/import/clear across both datasets).
+4. **AppShell** — new glue code only: main-tab switching (Zeit/Aufgaben/Daten), the unified theme toggle, and the Daten tab (backup/export/import/clear across both datasets, plus TimeModule's relocated snapshot and ticket-preset management).
 
-**Read [`docs/architecture.md`](docs/architecture.md) before making a structural change** (new cross-module feature, renamed/removed DOM id, anything touching the sticky bar, tab switching, theming, or the Daten menu). It has the full DOM tree, the renamed-id table, the complete `window.LWT` surface with what each method does and who calls it, and a "where do I make this change" decision guide — everything below in this section is the short version.
+**Read [`docs/architecture.md`](docs/architecture.md) before making a structural change** (new cross-module feature, renamed/removed DOM id, anything touching the sticky bar, tab switching, theming, or the Daten tab). It has the full DOM tree, the renamed-id table, the complete `window.LWT` surface with what each method does and who calls it, and a "where do I make this change" decision guide — everything below in this section is the short version.
 
-Each module keeps its own internal state, storage keys, and rendering — they do **not** share DOM ids beyond a handful of deliberately centralized elements (`#themeToggleBtn`, `#dataMenu` and its contents, `#toastRoot`, the sticky `#currentTimer`/`#pomodoroBar` pair). Task- and time-specific ids that existed in both source apps were prefixed (`task-tabbar`, `task-viewRoot`, `taskConfirmDialog`, `taskPromptDialog`, `timeEditDialog`, `timeConfirmDialog`) to avoid collisions.
+Each module keeps its own internal state, storage keys, and rendering — they do **not** share DOM ids beyond a handful of deliberately centralized elements (`#themeToggleBtn`, `#toastRoot`, the sticky `#currentTimer`/`#pomodoroBar` pair, and the Daten-tab controls — `#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`). Task- and time-specific ids that existed in both source apps were prefixed (`task-tabbar`, `task-viewRoot`, `taskConfirmDialog`, `taskPromptDialog`, `timeEditDialog`, `timeConfirmDialog`) to avoid collisions.
 
 **`window.LWT` surface:**
 - `LWT.time.getActiveTimer()`, `LWT.time.startTimerFromTask(taskId, ticketLabel, notes)`, `LWT.time.getTrackedMinutesLabel(taskId)`, `LWT.time.getExportPayload()`, `LWT.time.exportCsv()`, `LWT.time.importPayload(parsed)`, `LWT.time.clearAllData()`, `LWT.time.refreshChartTheme()`.
 - `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`.
-- `LWT.shell.switchTab(name)` — `'time'` or `'tasks'`.
+- `LWT.shell.switchTab(name)` — `'time'`, `'tasks'`, or `'daten'`.
 
 When adding to either module, prefer extending this surface over reaching into the other module's internals directly.
 
@@ -63,7 +63,7 @@ Unchanged from LocalTasks:
 }
 ```
 
-`orderKey` drives manual priorisation within Woche/Geplant (`reorderTask`, `attachReorder`, `moveTaskStep` in TaskModule) — ascending within a priority bucket (`byPriority`). Legacy records without it default to `-updatedAt` in `normalizeTask`, reproducing the old "most recently touched first" order until a drag or the ▲/▼ buttons assign real values. `todayFlag` tasks are not a separate panel and are not force-sorted to the top — `renderPlannedCard` only highlights them (`.task-card.focus`) and shows "▶ Timer starten" directly off `task.todayFlag`, wherever `orderKey` places them within their priority group, so starring a task never fights a manual drag&drop reorder.
+`orderKey` drives manual priorisation within Woche/Geplant (`reorderTask`, `attachReorder`, `moveTaskStep` in TaskModule) — ascending within a priority bucket (`byPriority`). Legacy records without it default to `-updatedAt` in `normalizeTask`, reproducing the old "most recently touched first" order until a drag or the ▲/▼ buttons assign real values. `todayFlag` tasks are not force-sorted within their priority group — `renderPlannedCard` highlights them there (`.task-card.focus`), wherever `orderKey` places them, so starring a task never fights a manual drag&drop reorder. Every planned card, regardless of `todayFlag`, additionally gets a compact ▶ icon button (title/aria-label "Timer für diese Aufgabe starten") that starts a timer via `LWT.time.startTimerFromTask`. They additionally appear, priority-sorted (via `focusTasks`), in a dedicated "Heute im Fokus" panel above the weekly groups (`renderWeekView`, current week only) — a non-draggable duplicate of the same cards (`renderPlannedCard(task, now, { draggable: false })`), not a replacement for the highlighted entry below.
 
 ### Time entries (`local-work-tracker-v1-time-entries`)
 

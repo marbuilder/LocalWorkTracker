@@ -6,7 +6,7 @@ For the **data model** (task/time-entry schema, storage keys) see [`data-model.m
 
 ## Why this shape
 
-LocalWorkTracker is LocalTasks and LocalTimetracker pushed into one `index.html`. Rather than interleave their code line-by-line, each app's original script was kept close to verbatim as its own IIFE, and a small new "shell" layer on top handles only what's genuinely new: tab switching, the sticky live-timer/Pomodoro bar, and the unified Daten menu. This keeps future changes to "how tasks work" or "how time tracking works" scoped to one module, searchable independently, and low-risk to cross-break.
+LocalWorkTracker is LocalTasks and LocalTimetracker pushed into one `index.html`. Rather than interleave their code line-by-line, each app's original script was kept close to verbatim as its own IIFE, and a small new "shell" layer on top handles only what's genuinely new: tab switching, the sticky live-timer/Pomodoro bar, and the Daten tab. This keeps future changes to "how tasks work" or "how time tracking works" scoped to one module, searchable independently, and low-risk to cross-break.
 
 ## The four `<script>` blocks, in document order
 
@@ -15,7 +15,7 @@ LocalWorkTracker is LocalTasks and LocalTimetracker pushed into one `index.html`
 | 1 | ~812–856 | **Boot** | Legacy-key migration, initial theme (before first paint) |
 | 2 | ~1214–3194 | **TimeModule** | Timer, Pomodoro, manual entries, filters/stats/chart, snapshots, ticket presets | `window.LWT.time` |
 | 3 | ~3196–4739 | **TaskModule** | Inbox/Triage/Woche/Backlog/Archiv, escalation, daily backup | `window.LWT.tasks` |
-| 4 | ~4741–4934 | **AppShell** | Main-tab switching, theme toggle, combined Daten menu | `window.LWT.shell` |
+| 4 | ~4874–5063 | **AppShell** | Main-tab switching, theme toggle, Daten tab | `window.LWT.shell` |
 
 Line numbers drift as the file is edited — treat the table as "which script, in which order", and re-`grep -n "<script>"` if you need exact numbers. Order matters: TimeModule must load before TaskModule (TaskModule's card rendering reads `window.LWT.time` while rendering), and both must load before AppShell (AppShell wires buttons that call into both).
 
@@ -28,7 +28,7 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Posteingang (inbox capture) | `renderInboxView`, `captureTask`, `inboxTasks` | TaskModule |
 | Triage (priority/effort) | `changePriority`, `changeEffort`, `chipRow` | TaskModule |
 | Woche (weekly planning) | `renderWeekView`, `plannedTasks`, `leftoverTasks`, `renderGroups`, `groupByPriority` | TaskModule |
-| Heute im Fokus (inline highlight within Woche/Geplant — no separate panel, no forced sort order) | `toggleToday`, `focusTasks`, `renderPlannedCard` (highlight + ▶ Timer starten driven by `task.todayFlag` directly, not an opts flag) | TaskModule |
+| Heute im Fokus (inline highlight within Woche/Geplant, plus a priority-sorted duplicate panel above the weekly groups for the current week) | `toggleToday`, `focusTasks` (priority-sorted source for both), `renderWeekView` (renders the dedicated panel via `renderGroups`/`renderPlannedCard` with `{ draggable: false }`, current week only), `renderPlannedCard` (highlight driven by `task.todayFlag` directly, not an opts flag; `draggable` opts flag disables drag&drop for the duplicate panel; the compact ▶ Timer-starten icon button shows on every planned card regardless of `todayFlag`) | TaskModule |
 | Manual drag&drop priorisation (Woche/Geplant only, incl. today-flagged tasks) | `reorderTask`, `reorderPeers`, `moveTaskStep`, `attachReorder`, `getDragAfterElement` | TaskModule |
 | Backlog | `renderBacklogView`, `backlogTasks`, `renderBacklogCard`, `isStale` | TaskModule |
 | Archiv | `renderArchiveView`, `archivedTasks`, `renderArchiveCard` | TaskModule |
@@ -39,7 +39,7 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Filters/stats/chart | filter-row handlers, `renderChart` (canvas) | TimeModule |
 | Snapshots, ticket presets | Snapshot `<details>` handlers, ticket-suggestion datalist wiring | TimeModule |
 | Task ↔ time linking | `resolveTaskIdForTicket`, `startTimerFromTask`, `getTrackedMs`/`getTrackedMinutesLabel` | Time↔Task, see below |
-| Tab switching, theme toggle, Daten menu | `switchTab`, theme click handler, Daten menu handlers | AppShell |
+| Tab switching, theme toggle, Daten tab | `switchTab`, theme click handler, Daten tab wiring | AppShell |
 | Legacy storage migration | `LEGACY_MAP` copy loop | Boot |
 
 Spacing is centralized in two CSS custom properties, `--gap-outer` (panel-to-panel) and `--gap-inner` (inside a panel), defined once per `:root` block (TimeModule's and TaskModule's) — see "CSS" below.
@@ -68,7 +68,7 @@ window.LWT = {
     getTaskCount()
   },
   shell: {
-    switchTab(name)  // 'time' | 'tasks'
+    switchTab(name)  // 'time' | 'tasks' | 'daten'
   }
 };
 ```
@@ -83,7 +83,7 @@ If you need a module to react to the other module's data, **add a method here** 
 { kind, exportedAt, version, tasks, contexts, timeEntries, ticketSuggestions }
 ```
 
-This is why there is only **one** daily-backup-due mechanism (`state.lastBackupDate` / `backupIntervalDays` live in TaskModule's state) even though the payload covers both datasets — see [`backup.md`](backup.md). AppShell's Daten menu just calls `LWT.tasks.exportJson()` / `runBackup()` directly; it does not build its own combined payload.
+This is why there is only **one** daily-backup-due mechanism (`state.lastBackupDate` / `backupIntervalDays` live in TaskModule's state) even though the payload covers both datasets — see [`backup.md`](backup.md). AppShell's Daten tab just calls `LWT.tasks.exportJson()` / `runBackup()` directly; it does not build its own combined payload.
 
 ### Import/Clear go through AppShell because they need one confirm, not two
 
@@ -96,13 +96,14 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
   <script> boot: migration + initial theme </script>
 
   <div class="container">
-    <header class="app-head">                 -- title, #dataMenu, #themeToggleBtn, #shortcutHelp (Zeit-only keyboard-shortcut popover, right of the theme toggle) (AppShell-owned)
+    <header class="app-head">                 -- title, #themeToggleBtn, #shortcutHelp (Zeit-only keyboard-shortcut popover, right of the theme toggle) (AppShell-owned)
     <div id="task-backupBanner" hidden>        -- rendered by TaskModule, placed in the header so it's visible from either tab
     <div class="current-row">                  -- sticky bar: #currentTimer + #pomodoroBar (TimeModule-owned, unchanged markup/JS from LocalTimetracker)
-    <nav id="mainTabbar">                      -- 2 buttons, data-main-tab="time"|"tasks" (AppShell-owned)
+    <nav id="mainTabbar">                      -- 3 buttons, data-main-tab="time"|"tasks"|"daten" (AppShell-owned)
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
       <section id="tabPanelTasks" hidden>      -- #task-tabbar + #task-viewRoot (TaskModule's own inner router, unchanged)
+      <section id="tabPanelDaten" hidden>      -- backup/export/import/clear (AppShell-owned) + relocated Snapshots/Ticket-Presets <details> (TimeModule-owned content, AppShell-owned tab panel) — the one place a tab panel's content isn't wholly owned by the module its name matches
     <footer class="app-footer">                -- static GitHub Pages / localStorage-only privacy note (AppShell-owned, no JS)
   </div>
 
@@ -130,9 +131,11 @@ Both source apps used identical ids for conceptually different things. Renamed o
 | `#confirmDialog` | `#taskConfirmDialog` | `#confirmDialog` | `#timeConfirmDialog` |
 | — | — | `#editDialog` | `#timeEditDialog` |
 
-Not renamed, deliberately centralized (one instance, owned by AppShell, both modules point their `getElementById` at the same node): `#themeToggleBtn`, `#dataMenu` and everything inside it, `#toastRoot`.
+Not renamed, deliberately centralized (one instance, owned by AppShell, both modules point their `getElementById` at the same node): `#themeToggleBtn`, `#toastRoot`, and the Daten-tab controls (`#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`).
 
-**Removed entirely** from both modules' markup and JS wiring, because AppShell's Daten menu replaced them: LocalTasks' own theme toggle + `<details id="dataMenu">` block; LocalTimetracker's own theme toggle + its "Import / Export & Datenverwaltung" `<details>` block (its Snapshots and Ticket-Presets `<details>` blocks were kept — those are Zeit-tab-only features, not part of the unified menu).
+**Removed entirely** from both modules' markup and JS wiring, because AppShell's Daten tab replaced them: LocalTasks' own theme toggle + `<details id="dataMenu">` block; LocalTimetracker's own theme toggle + its "Import / Export & Datenverwaltung" `<details>` block.
+
+The header `#dataMenu` dropdown that AppShell introduced at merge time was itself later removed and its contents (plus TimeModule's own Snapshots/Ticket-Presets `<details>`, previously Zeit-tab-only) consolidated into a dedicated third main tab, `#tabPanelDaten` — see "Tab switching" below.
 
 ## CSS
 
@@ -153,7 +156,9 @@ If you're chasing a theme bug, it's in the boot script or AppShell — not in Ti
 
 ## Tab switching
 
-`AppShell` holds two DOM references (`#tabPanelTime`, `#tabPanelTasks`) and a list of `#mainTabbar button[data-main-tab]`. `switchTab(name)` toggles `hidden` on the panels and `.active`/`aria-current` on the buttons, and persists the choice to `local-work-tracker-v1-ui-active-tab` so a reload reopens the same tab. Both panels' content is always in the DOM (just hidden) — there's no re-render-on-switch, so switching tabs is instant and doesn't disturb in-progress form state in the other tab.
+`AppShell` holds three DOM references (`#tabPanelTime`, `#tabPanelTasks`, `#tabPanelDaten`) and a list of `#mainTabbar button[data-main-tab]`. `switchTab(name)` toggles `hidden` on the panels and `.active`/`aria-current` on the buttons, and persists the choice to `local-work-tracker-v1-ui-active-tab` so a reload reopens the same tab. All three panels' content is always in the DOM (just hidden) — there's no re-render-on-switch, so switching tabs is instant and doesn't disturb in-progress form state in another tab.
+
+`#tabPanelDaten` is the one tab panel whose content isn't wholly owned by the module its name matches: it holds AppShell's own backup/export/import/clear controls *and* TimeModule's Snapshots/Ticket-Presets `<details>` blocks (moved there verbatim from the Zeit tab — their JS is 100% private to TimeModule's closure and needed zero changes, since `getElementById`/`querySelectorAll('details[data-ui-key]')` don't care where in the DOM a node lives).
 
 `#shortcutHelp` (⌨️, in `.app-head-actions` right of `#themeToggleBtn`) is **not** tab-gated, on purpose: `TimeModule`'s `handleGlobalShortcut` (Ctrl+Enter, Esc, Alt+arrows, Alt+T) is bound on `document` with no active-tab check, so a running timer can be stopped with Esc and the day shortcuts still work even while the Aufgaben tab is showing — hiding the legend there would hide documentation for shortcuts that are still live. (Any element that *would* need per-tab hiding still must pair its CSS `display` rule with a `[hidden] { display: none; }` override, same pattern as `.tab-panel[hidden]` — otherwise the plain rule's equal-or-higher specificity beats the UA default and the `hidden` attribute does nothing. `.shortcut-help[hidden]` is kept for exactly that reason, even though nothing sets it today.)
 
@@ -175,6 +180,6 @@ The boot script's `LEGACY_MAP` is a flat list of `[oldKey, newKey]` pairs, copie
 
 - **Touching only Zeit-tab behavior?** Stay inside the TimeModule script block. Its internals (`state`, `dom`, all the `render*` functions) are private — the only way out is adding to the `window.LWT.time = {...}` object near the top of the module (right after the boot `setInterval`).
 - **Touching only Aufgaben-tab behavior?** Stay inside the TaskModule script block, same pattern — extend `window.LWT.tasks = {...}` near its `init()` call at the bottom.
-- **Touching the sticky bar, tab switching, or the Daten menu?** That's AppShell — the last script block, plain functions (not wrapped in as many closures as the modules, since there's less of it).
-- **Adding a new cross-module feature?** Add a method to the relevant module's `window.LWT.*` object first, then consume it from the other module or from AppShell. Don't add a fifth script block or a new global unless it's genuinely shell-level (tab/theme/menu), matching what AppShell already owns.
+- **Touching the sticky bar, tab switching, or the Daten tab?** That's AppShell — the last script block, plain functions (not wrapped in as many closures as the modules, since there's less of it).
+- **Adding a new cross-module feature?** Add a method to the relevant module's `window.LWT.*` object first, then consume it from the other module or from AppShell. Don't add a fifth script block or a new global unless it's genuinely shell-level (tab/theme/Daten), matching what AppShell already owns.
 - **Renaming or removing a DOM id?** Check the table above first — an id that looks unique might be intentionally shared (`#toastRoot`, `#themeToggleBtn`) or intentionally split (`task-viewRoot` vs the old `viewRoot`).
