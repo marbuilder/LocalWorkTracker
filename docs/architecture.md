@@ -28,7 +28,7 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Posteingang (inbox capture) | `renderInboxView`, `captureTask`, `inboxTasks` | TaskModule |
 | Triage (priority/effort) | `changePriority`, `changeEffort`, `chipRow` | TaskModule |
 | Woche (weekly planning) | `renderWeekView`, `plannedTasks`, `leftoverTasks`, `renderGroups`, `groupByPriority` | TaskModule |
-| Heute im Fokus (inline highlight within Woche/Geplant — no separate panel, no forced sort order) | `toggleToday`, `focusTasks`, `renderPlannedCard` (highlight + ▶ Timer starten driven by `task.todayFlag` directly, not an opts flag) | TaskModule |
+| Heute im Fokus (inline highlight within Woche/Geplant, plus a priority-sorted duplicate panel above the weekly groups for the current week) | `toggleToday`, `focusTasks` (priority-sorted source for both), `renderWeekView` (renders the dedicated panel via `renderGroups`/`renderPlannedCard` with `{ draggable: false }`, current week only), `renderPlannedCard` (highlight + ▶ Timer starten driven by `task.todayFlag` directly, not an opts flag; `draggable` opts flag disables drag&drop for the duplicate panel) | TaskModule |
 | Manual drag&drop priorisation (Woche/Geplant only, incl. today-flagged tasks) | `reorderTask`, `reorderPeers`, `moveTaskStep`, `attachReorder`, `getDragAfterElement` | TaskModule |
 | Backlog | `renderBacklogView`, `backlogTasks`, `renderBacklogCard`, `isStale` | TaskModule |
 | Archiv | `renderArchiveView`, `archivedTasks`, `renderArchiveCard` | TaskModule |

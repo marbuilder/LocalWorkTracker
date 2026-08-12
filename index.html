@@ -4268,18 +4268,24 @@
         return card;
       }
 
-      function renderPlannedCard(task, now) {
+      function renderPlannedCard(task, now, opts = {}) {
+        const { draggable = true } = opts;
         const { card, main } = taskCardShell(task, now, { focus: task.todayFlag });
         // Manual drag&drop priorisation is scoped to this card type only
-        // (Woche/Geplant) — see attachReorder().
-        card.draggable = true;
+        // (Woche/Geplant) — see attachReorder(). draggable is false for the
+        // Heute-Sektion duplicate above the priority groups, since dragging
+        // there would only see that filtered subset and corrupt orderKey
+        // for the peers hidden below.
+        card.draggable = draggable;
         card.dataset.taskId = task.id;
-        card.addEventListener('dragstart', ev => {
-          ev.dataTransfer.effectAllowed = 'move';
-          ev.dataTransfer.setData('text/plain', task.id);
-          requestAnimationFrame(() => card.classList.add('dragging'));
-        });
-        card.addEventListener('dragend', () => card.classList.remove('dragging'));
+        if (draggable) {
+          card.addEventListener('dragstart', ev => {
+            ev.dataTransfer.effectAllowed = 'move';
+            ev.dataTransfer.setData('text/plain', task.id);
+            requestAnimationFrame(() => card.classList.add('dragging'));
+          });
+          card.addEventListener('dragend', () => card.classList.remove('dragging'));
+        }
 
         const actions = el('div', { className: 'task-actions' });
         const peers = reorderPeers(task);
@@ -4391,10 +4397,11 @@
       }
 
       // Native HTML5 drag&drop, scoped to whichever `.task-list` container is
-      // passed in (Woche/Geplant groups, or the flat Heute-im-Fokus list —
-      // see renderWeekView). priorityKey is null for the flat list (no
-      // priority to reassign); for a grouped list it's that group's key, so
-      // dropping a card into a different priority group changes its priority.
+      // passed in (Woche/Geplant groups). Not attached for the Heute-Sektion
+      // (renderWeekView renders it with { reorderable: false } and
+      // draggable: false cards — see renderPlannedCard). priorityKey is that
+      // group's key, so dropping a card into a different priority group
+      // changes its priority.
       function getDragAfterElement(container, y) {
         const cards = Array.from(container.querySelectorAll(':scope > .task-card:not(.dragging)'));
         return cards.reduce((closest, child) => {
@@ -4515,6 +4522,23 @@
         navPanel.appendChild(nav);
         frag.appendChild(navPanel);
 
+        // Heute im Fokus — a duplicate, priority-sorted summary of todayFlag
+        // tasks shown above the weekly groups. Only for the current week
+        // (todayFlag is a "today" concept). Cards are non-draggable here —
+        // see renderPlannedCard's draggable option — the full, reorderable
+        // card still lives below in its normal priority group.
+        if (isCurrent) {
+          const focus = focusTasks();
+          if (focus.length) {
+            const focusPanel = el('section', { className: 'panel' });
+            focusPanel.appendChild(el('div', { className: 'panel-head' }, [
+              el('h2', { text: `Heute im Fokus (${focus.length})` })
+            ]));
+            renderGroups(focusPanel, focus, (t, n) => renderPlannedCard(t, n, { draggable: false }), now, { reorderable: false });
+            frag.appendChild(focusPanel);
+          }
+        }
+
         // Leftovers from earlier weeks.
         const leftovers = leftoverTasks(ui.weekKey);
         if (leftovers.length) {
@@ -4547,13 +4571,9 @@
         }
 
         const planned = plannedTasks(ui.weekKey);
-        const todayCount = planned.filter(t => t.todayFlag).length;
         const panel = el('section', { className: 'panel' });
         const heading = [el('h2', { text: `Geplant für ${shortWeek(ui.weekKey)} (${planned.length})` })];
         panel.appendChild(el('div', { className: 'panel-head' }, heading));
-        if (todayCount) {
-          panel.appendChild(el('p', { className: 'hint', text: `${todayCount} davon heute im Fokus (★, farblich markiert).` }));
-        }
         if (!planned.length) {
           panel.appendChild(el('div', { className: 'empty', text: 'Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.' }));
         } else {
@@ -4687,6 +4707,11 @@
       }
 
       function render() {
+        // Detaching and re-appending #task-viewRoot's children below
+        // collapses the page height for a moment, which makes the browser
+        // clamp window.scrollY — save/restore it so a long, scrolled-down
+        // list doesn't jump to the top after every action.
+        const scrollY = window.scrollY;
         const now = Date.now();
         renderTabs();
         renderBackupBanner();
@@ -4697,6 +4722,7 @@
         else if (ui.tab === 'archive') content = renderArchiveView(now);
         else content = renderInboxView(now);
         task_viewRoot.appendChild(content);
+        window.scrollTo(0, scrollY);
       }
 
       /* ══════════════════════════════════════════════════════════
