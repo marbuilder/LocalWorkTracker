@@ -18,20 +18,22 @@ Ganz oben, immer sichtbar, unabhängig davon welcher Tab gerade aktiv ist:
 - **Live-Timer** — läuft ein Timer, zeigt die Leiste Ticket und verstrichene Zeit mit Stop-Button; läuft keiner, ein Schnellstart-Feld.
 - **Pomodoro** — eigener Countdown daneben, ebenfalls immer sichtbar.
 
-Darunter zwei Tabs:
+Darunter drei Tabs:
 
-- **⏱ Zeit** — Timer starten/stoppen, manuelle Einträge, Filter & Auswertung, Diagramm, Ticket-Presets, lokale Snapshots.
+- **⏱ Zeit** — Timer starten/stoppen, manuelle Einträge, Filter & Auswertung, Diagramm.
 - **✅ Aufgaben** — Posteingang (Schnellerfassung) → Triage (Priorität/Aufwand) → Woche (Planung + „Heute“-Fokus) → Archiv. Zwei Leitplanken wie zuvor: Aufgaben bis 15 Minuten werden zum Sofort-erledigen gedrängt statt geplant; alles größer als ein halber Tag wird als Story ins Unternehmenssystem eskaliert, nie hier geplant.
+- **🗂 Daten** — Sicherung, Export/Import, Snapshots, Ticket-Presets, Alles löschen.
 
 **Verknüpfung:** Ein Zeiteintrag kann optional auf eine Aufgabe zeigen. In der „Heute“-Fokusliste startet ein ▶-Button den Timer direkt für diese Aufgabe (wechselt automatisch in den Zeit-Tab). Tippt man stattdessen manuell eine Ticket-Nr., die zu einer offenen Aufgabe passt (Story-Key oder Titel), wird sie automatisch verknüpft. Aufgabenkarten zeigen dann die kumulierte getrackte Zeit.
 
 ## Daten
 
-Ein gemeinsames „Daten ▾“-Menü im Header:
+Der 🗂 Daten-Tab bündelt:
 
 - Tagesbackup (JSON, Aufgaben + Zeiteinträge zusammen), fällig je nach eingestelltem Intervall.
 - Export als JSON (kombiniert) oder CSV (Aufgaben und Zeiteinträge getrennt, da unterschiedliche Tabellenform).
 - Import (JSON, ersetzt den aktuellen Bestand nach Bestätigung).
+- Lokale Snapshots und Ticket-Presets (weiterhin reine Zeiterfassungsdaten).
 - Alles löschen.
 
 Details zum Backup-Mechanismus und den Browser-Grenzen dabei: [`docs/backup.md`](docs/backup.md).

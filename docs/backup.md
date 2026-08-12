@@ -6,9 +6,9 @@ Beim ersten Laden an einem neuen Tag (abhängig vom eingestellten Intervall — 
 
 Ein Fehlschlag beim Download wird erkannt (die Datei landet aber nicht zwangsläufig auf der Platte — eine Seite kann das nicht zuverlässig prüfen; kein Fehler wird deshalb als Erfolg gewertet, siehe `runBackup()` in `index.html`).
 
-## Daten-Menü
+## Daten-Tab
 
-Header → „Daten ▾":
+Tab „🗂 Daten":
 
 - **Backup jetzt herunterladen** — löst denselben kombinierten Download manuell aus.
 - **Alles exportieren (JSON)** — dasselbe kombinierte Format, für Archivierung oder Migration auf ein anderes Gerät.
@@ -20,9 +20,9 @@ Header → „Daten ▾":
 
 Wer vorher LocalTasks und/oder LocalTimetracker im selben Browser genutzt hat, muss nichts tun: beim allerersten Start liest LocalWorkTracker die alten `localStorage`-Schlüssel dieser Apps aus und übernimmt sie einmalig unter den neuen, gemeinsamen Schlüsseln (siehe [`data-model.md`](data-model.md#speicher-keys)). Die alten Schlüssel werden dabei **nicht** gelöscht — falls eine der Einzel-Apps parallel weiterverwendet wird, bleibt deren Datenbestand unangetastet. Ein zweiter Start überschreibt bereits migrierte Daten nicht erneut.
 
-## Snapshots (Zeit-Tab)
+## Snapshots (Daten-Tab)
 
-Zusätzlich zum Tagesbackup bietet der Zeit-Tab weiterhin lokale Snapshots (bis zu 5, ältere fallen automatisch raus) — unverändert gegenüber LocalTimetracker, unabhängig vom kombinierten Backup.
+Zusätzlich zum Tagesbackup bietet der Daten-Tab weiterhin lokale Snapshots (bis zu 5, ältere fallen automatisch raus) — inhaltlich unverändert gegenüber LocalTimetracker (reine Zeiterfassungsdaten, keine Aufgaben), unabhängig vom kombinierten Backup.
 
 ## Browser-Grenzen
 

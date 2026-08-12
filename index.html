@@ -731,26 +731,6 @@
       border: 1px dashed var(--border); border-radius: 12px; font-size: 14px; line-height: 1.6;
     }
 
-    /* ── Data menu ─────────────────────────────────────────────── */
-    .data-menu { position: relative; }
-    .data-menu > summary {
-      list-style: none; cursor: pointer; user-select: none;
-      min-height: 36px; padding: 7px 14px; border-radius: 999px;
-      background: var(--btn-bg); border: 1px solid var(--border);
-      display: inline-flex; align-items: center; gap: 6px; font-size: 14px;
-    }
-    .data-menu > summary::-webkit-details-marker { display: none; }
-    .data-menu[open] > summary { background: var(--btn-bg-hover); }
-    .data-menu .data-menu-body {
-      position: absolute; right: 0; top: calc(100% + 6px);
-      min-width: 280px; padding: 12px;
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
-      display: flex; flex-direction: column; gap: 6px; z-index: 20;
-    }
-    .data-menu .data-menu-body button { min-height: 36px; font-size: 13px; }
-    .data-menu .data-menu-body hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; width: 100%; }
-
     /* ── Toasts ────────────────────────────────────────────────── */
     #toastRoot {
       position: fixed; right: 16px; bottom: 16px; z-index: 60;
@@ -803,7 +783,6 @@
       .app-head-actions { justify-content: flex-end; }
       .chip-group { align-items: flex-start; flex-direction: column; gap: 4px; }
       .task-actions { width: 100%; }
-      .data-menu .data-menu-body { right: auto; left: 0; min-width: min(280px, calc(100vw - 40px)); }
     }
 
     /* ══════════════════════════════════════════════════════════
@@ -876,23 +855,6 @@
     <header class="app-head">
       <h1>LocalWorkTracker</h1>
       <div class="app-head-actions">
-        <details class="data-menu" id="dataMenu">
-          <summary>Daten ▾</summary>
-          <div class="data-menu-body">
-            <div class="muted" style="font-size:12px" id="lastBackupInfo">Letztes Backup: –</div>
-            <label for="backupIntervalSelect" style="font-size:12px;margin-bottom:2px">Automatisches Backup</label>
-            <select id="backupIntervalSelect" style="min-height:36px;font-size:13px"></select>
-            <button type="button" id="backupNowBtn" class="primary">Backup jetzt herunterladen</button>
-            <hr>
-            <button type="button" id="exportJsonBtn">Alles exportieren (JSON)</button>
-            <button type="button" id="exportTasksCsvBtn">Aufgaben exportieren (CSV)</button>
-            <button type="button" id="exportTimeCsvBtn">Zeiteinträge exportieren (CSV)</button>
-            <button type="button" id="importBtn">Importieren (JSON)</button>
-            <input id="importFile" type="file" accept="application/json,.json" hidden>
-            <hr>
-            <button type="button" id="clearAllBtn" class="bad">Alles löschen</button>
-          </div>
-        </details>
         <button type="button" id="themeToggleBtn" class="ghost" title="Hell/Dunkel" aria-label="Farbschema wechseln">🌙</button>
         <details class="shortcut-help" id="shortcutHelp">
           <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel">⌨️</summary>
@@ -939,6 +901,7 @@
     <nav class="tabbar" id="mainTabbar" aria-label="Hauptbereiche">
       <button type="button" data-main-tab="time">⏱ Zeit</button>
       <button type="button" data-main-tab="tasks">✅ Aufgaben</button>
+      <button type="button" data-main-tab="daten">🗂 Daten</button>
     </nav>
 
     <main id="mainViewRoot">
@@ -1107,7 +1070,46 @@
       </section>
 
       <section class="panel full">
-        <h2>Daten</h2>
+        <h2>Einträge</h2>
+        <div id="entriesContainer"></div>
+      </section>
+    </div>
+
+      </section>
+      <section id="tabPanelTasks" class="tab-panel" hidden>
+    <nav class="tabbar" id="task-tabbar" aria-label="Ansichten"></nav>
+    <main id="task-viewRoot"></main>
+
+      </section>
+      <section id="tabPanelDaten" class="tab-panel" hidden>
+    <div class="grid">
+      <section class="panel full">
+        <h2>Sicherung</h2>
+        <div class="muted" style="font-size:12px" id="lastBackupInfo">Letztes Backup: –</div>
+        <div class="row">
+          <div class="field s6">
+            <label for="backupIntervalSelect">Automatisches Backup</label>
+            <select id="backupIntervalSelect"></select>
+          </div>
+        </div>
+        <div class="toolbar">
+          <button type="button" id="backupNowBtn" class="primary">Backup jetzt herunterladen</button>
+        </div>
+      </section>
+
+      <section class="panel full">
+        <h2>Export &amp; Import</h2>
+        <div class="toolbar">
+          <button type="button" id="exportJsonBtn">Alles exportieren (JSON)</button>
+          <button type="button" id="exportTasksCsvBtn">Aufgaben exportieren (CSV)</button>
+          <button type="button" id="exportTimeCsvBtn">Zeiteinträge exportieren (CSV)</button>
+          <button type="button" id="importBtn">Importieren (JSON)</button>
+          <input id="importFile" type="file" accept="application/json,.json" hidden>
+        </div>
+      </section>
+
+      <section class="panel full">
+        <h2>Snapshots &amp; Presets</h2>
         <details class="compact-menu" data-ui-key="snapshots">
           <summary>Snapshots (Backups)</summary>
           <div class="compact-inner">
@@ -1144,16 +1146,12 @@
       </section>
 
       <section class="panel full">
-        <h2>Einträge</h2>
-        <div id="entriesContainer"></div>
+        <h2>Gefahrenzone</h2>
+        <div class="toolbar">
+          <button type="button" id="clearAllBtn" class="bad">Alles löschen</button>
+        </div>
       </section>
     </div>
-
-      </section>
-      <section id="tabPanelTasks" class="tab-panel" hidden>
-    <nav class="tabbar" id="task-tabbar" aria-label="Ansichten"></nav>
-    <main id="task-viewRoot"></main>
-
       </section>
     </main>
 
@@ -4933,7 +4931,8 @@
       var tabButtons = document.querySelectorAll('#mainTabbar button[data-main-tab]');
       var panels = {
         time: qs('tabPanelTime'),
-        tasks: qs('tabPanelTasks')
+        tasks: qs('tabPanelTasks'),
+        daten: qs('tabPanelDaten')
       };
       function switchTab(name) {
         if (!panels[name]) return;
@@ -4953,10 +4952,9 @@
       window.LWT.shell = { switchTab: switchTab };
       var savedTab = 'time';
       try { savedTab = localStorage.getItem('local-work-tracker-v1-ui-active-tab') || 'time'; } catch (err) { /* ignore */ }
-      switchTab(savedTab === 'tasks' ? 'tasks' : 'time');
+      switchTab(panels[savedTab] ? savedTab : 'time');
 
-      /* ── Combined data menu ─────────────────────────────────── */
-      var dataMenu = qs('dataMenu');
+      /* ── Daten tab wiring ───────────────────────────────────── */
       var lastBackupInfo = qs('lastBackupInfo');
       var backupIntervalSelect = qs('backupIntervalSelect');
 
@@ -5061,10 +5059,6 @@
           refreshBackupInfo();
         });
       }
-
-      document.addEventListener('click', function (ev) {
-        if (dataMenu && dataMenu.open && !dataMenu.contains(ev.target)) dataMenu.open = false;
-      });
     })();
   </script>
 </body>
