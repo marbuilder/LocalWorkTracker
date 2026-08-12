@@ -896,11 +896,13 @@
     <div class="current-row">
       <div id="currentTimer" class="current current-compact sticky-bar" aria-live="polite">
         <div id="currentTimerStatus" class="current-status"></div>
-        <div class="current-controls">
-          <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr." autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+        <div class="ticket-row current-ticket-row">
+          <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
           <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
             <option value="">Vorauswahl…</option>
           </select>
+        </div>
+        <div class="current-controls">
           <input id="timerStartTime" type="time" class="time-input-compact" step="60" aria-label="Uhrzeit (optional, heute)" placeholder="Uhrzeit">
           <details class="field-info current-notes-popover" data-ui-key="timerNotes">
             <summary aria-label="Notiz hinzufügen">Notiz</summary>
