@@ -253,24 +253,26 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 12px;
-      align-items: start;
     }
     .current-side { display: flex; flex-direction: column; gap: 12px; }
     .current-compact {
-      flex-direction: column; align-items: stretch; justify-content: flex-start;
+      flex-direction: column; align-items: stretch; justify-content: space-between;
     }
-    .current-info { display: flex; flex-direction: column; gap: 8px; width: 100%; }
     .current-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     .current-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .ticket-input-compact { width: auto; flex: 1 1 140px; min-width: 120px; min-height: 36px; padding: 6px 10px; font-size: 14px; }
     .ticket-preset-compact { width: auto; max-width: 120px; min-height: 36px; padding: 6px 8px; font-size: 13px; }
     .time-input-compact { width: auto; min-width: 90px; min-height: 36px; padding: 6px 8px; font-size: 13px; }
-    .current-notes-popover summary, .current-time-info summary { width: 22px; height: 22px; font-size: 13px; }
+    .current-time-info summary { width: 22px; height: 22px; font-size: 13px; }
+    .current-notes-popover summary {
+      width: auto; height: auto; border-radius: 8px;
+      padding: 6px 10px; font-size: 13px; font-weight: 600;
+    }
     .current-notes-tip { min-width: 220px; }
     .current-notes-tip label { margin-bottom: 4px; }
     .current-notes-tip textarea { min-height: 70px; }
-    .current-toolbar-compact { margin: 0; gap: 6px; }
-    .icon-btn { width: auto; min-height: 36px; padding: 6px 12px; font-size: 15px; line-height: 1; }
+    .current-toolbar { margin: 0; gap: 8px; }
+    .current-toolbar button { width: auto; min-height: 36px; padding: 6px 16px; }
     .pomodoro-bar { flex-wrap: wrap; }
     .pomodoro-count { min-width: 168px; text-align: right; }
     .pomodoro-info { display: flex; flex-direction: column; gap: 8px; }
@@ -893,35 +895,33 @@
 
     <div class="current-row">
       <div id="currentTimer" class="current current-compact sticky-bar" aria-live="polite">
-        <div class="current-info">
-          <div id="currentTimerStatus" class="current-status"></div>
-          <div class="current-controls">
-            <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr." autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
-            <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
-              <option value="">Vorauswahl…</option>
-            </select>
-            <input id="timerStartTime" type="time" class="time-input-compact" step="60" aria-label="Uhrzeit (optional, heute)" placeholder="Zeit">
-            <details class="field-info current-notes-popover" data-ui-key="timerNotes">
-              <summary aria-label="Notiz hinzufügen" title="Notiz">📝</summary>
-              <div class="field-info-tip current-notes-tip">
-                <label for="taskNotes">Notiz</label>
-                <textarea id="taskNotes" placeholder="Optional"></textarea>
-              </div>
-            </details>
-            <details class="field-info current-time-info">
-              <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
-              <div class="field-info-tip">
-                <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
-                <b>Beim Start ausgefüllt</b><br>Setzt die Startzeit; Feld leert sich danach automatisch.<br><br>
-                <b>Beim Stop ausgefüllt</b><br>Setzt die Endzeit des laufenden Timers.<br><br>
-                <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
-              </div>
-            </details>
-            <div class="toolbar current-toolbar-compact">
-              <button id="startBtn" class="good icon-btn" title="Start" aria-label="Timer starten">▶</button>
-              <button id="stopBtn" class="warn icon-btn" title="Stop" aria-label="Timer stoppen">⏹</button>
-              <button id="resetFormBtn" class="ghost icon-btn" title="Felder leeren" aria-label="Felder leeren">↺</button>
+        <div id="currentTimerStatus" class="current-status"></div>
+        <div class="current-controls">
+          <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr." autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+          <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
+            <option value="">Vorauswahl…</option>
+          </select>
+          <input id="timerStartTime" type="time" class="time-input-compact" step="60" aria-label="Uhrzeit (optional, heute)" placeholder="Uhrzeit">
+          <details class="field-info current-notes-popover" data-ui-key="timerNotes">
+            <summary aria-label="Notiz hinzufügen">Notiz</summary>
+            <div class="field-info-tip current-notes-tip">
+              <label for="taskNotes">Notiz</label>
+              <textarea id="taskNotes" placeholder="Optional"></textarea>
             </div>
+          </details>
+          <details class="field-info current-time-info">
+            <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
+            <div class="field-info-tip">
+              <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
+              <b>Beim Start ausgefüllt</b><br>Setzt die Startzeit; Feld leert sich danach automatisch.<br><br>
+              <b>Beim Stop ausgefüllt</b><br>Setzt die Endzeit des laufenden Timers.<br><br>
+              <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
+            </div>
+          </details>
+          <div class="toolbar current-toolbar">
+            <button id="startBtn" class="good">Start</button>
+            <button id="stopBtn" class="warn">Stop</button>
+            <button id="resetFormBtn" class="ghost" title="Felder leeren" aria-label="Felder leeren">Leeren</button>
           </div>
         </div>
       </div>
