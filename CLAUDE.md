@@ -58,9 +58,12 @@ Unchanged from LocalTasks:
   todayFlag: boolean,           // member of the "Heute" focus list
   carryCount: number,
   externalRef: string,          // sanitized, max 60 — story key once escalated
+  orderKey: number,             // manual drag&drop order — see below
   createdAt: number, updatedAt: number, doneAt: number | null
 }
 ```
+
+`orderKey` drives manual priorisation within Woche/Geplant (`reorderTask`, `attachReorder`, `moveTaskStep` in TaskModule) — ascending within a priority bucket (`byPriority`). Legacy records without it default to `-updatedAt` in `normalizeTask`, reproducing the old "most recently touched first" order until a drag or the ▲/▼ buttons assign real values. `todayFlag` tasks are not a separate panel and are not force-sorted to the top — `renderPlannedCard` only highlights them (`.task-card.focus`) and shows "▶ Timer starten" directly off `task.todayFlag`, wherever `orderKey` places them within their priority group, so starring a task never fights a manual drag&drop reorder.
 
 ### Time entries (`local-work-tracker-v1-time-entries`)
 
@@ -120,8 +123,9 @@ Requirements imposed by `tests/run-headless.mjs`:
 
 ## Working Approach
 
-- Minimal, focused diffs. Consistently reuse existing patterns (`row` / `field s*`, `panel`, `pill`, `tabbar`, CSS variables `--bg`, `--panel`, `--accent`, …).
+- Minimal, focused diffs. Consistently reuse existing patterns (`row` / `field s*`, `panel`, `pill`, `tabbar`, CSS variables `--bg`, `--panel`, `--accent`, `--gap-outer`, `--gap-inner`, …).
 - Before changing code, read the relevant section of `index.html` — the file is large but searchable, and the four-IIFE structure above tells you where to look.
 - German labels for priorities, efforts and statuses are defined once in the `PRIORITIES`, `EFFORTS` and `STATUSES` lookup tables inside TaskModule. Do not hardcode them elsewhere.
 - For UI changes, check the breakpoints (`1050px`, `700px`) and the light theme (`body[data-theme="light"]`).
 - If a change needs both modules to know about each other, extend `window.LWT.*` rather than reaching into the other module's private closures.
+- **Keep [`docs/architecture.md`](docs/architecture.md) in sync, in the same change**, whenever you: add, rename, or remove a DOM id; add or change a `window.LWT.*` method; move a function across the four script-block boundaries; add a data-model field (update this file's Data Model section too); or add a CSS custom property/component shared across TimeModule and TaskModule. Anchor additions to `docs/architecture.md`'s feature→function table on stable function names, not line numbers — line numbers drift on every edit.
