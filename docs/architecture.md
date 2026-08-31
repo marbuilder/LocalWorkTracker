@@ -38,8 +38,8 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Daily backup | `isBackupDue`, `runBackup`, `getBackupStatus`, `buildBackupPayload` | TaskModule |
 | Timer start/stop, manual entries | `startTimer`, `internalStopTimer`, `autoStopActiveTimerIfDayEnded` | TimeModule |
 | Pomodoro | `renderPomodoro`, the Pomodoro `setInterval` tick | TimeModule |
-| Filters/stats/chart | filter-row handlers, `renderChart` (canvas) | TimeModule |
-| Snapshots, ticket presets | Snapshot `<details>` handlers, ticket-suggestion datalist wiring | TimeModule |
+| Filters/stats/chart, Gruppenauswertung (Ticket + Beschreibung, copy button) | filter-row handlers, `renderChart` (canvas), `buildSummaryRows`, `ticketCopyButton` | TimeModule |
+| Snapshots, ticket presets (number/description pairs) | Snapshot `<details>` handlers, ticket-suggestion datalist wiring, `normalizeTicketPair`, `dedupeTicketPairs`, `splitLegacyTicket` | TimeModule |
 | Task ↔ time linking | `resolveTaskIdForTicket`, `startTimerFromTask`, `getTrackedMs`/`getTrackedMinutesLabel` | Time↔Task, see below |
 | Tab switching, theme toggle, Daten tab | `switchTab`, theme click handler, Daten tab wiring | AppShell |
 | Notiz-Widget (Sticky-Bar, freies Markdown ohne Rendering) | `sanitizeNotes`, `loadNotes`/`saveNotes`, `scheduleNotesSave`/`flushNotesSave`, `setNotesStatus` | AppShell |
@@ -55,7 +55,7 @@ Each of scripts 2 and 3 is its own `(() => { 'use strict'; ... })();` — a priv
 window.LWT = {
   time: {
     getActiveTimer(),                              // current state.activeTimer or null
-    startTimerFromTask(taskId, ticketLabel, notes), // used by the Aufgaben ▶ button
+    startTimerFromTask(taskId, ticketLabel, ticketDescription, notes), // used by the Aufgaben ▶ button
     getTrackedMinutesLabel(taskId),                 // "1 Std. 15 Min." or null — used by task cards
     getExportPayload(),                             // { entries, ticketSuggestions } — read by TaskModule's combined backup
     exportCsv(),                                    // triggers a download directly
@@ -111,7 +111,7 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
     <div id="task-backupBanner" hidden>        -- rendered by TaskModule, placed in the header so it's visible from either tab
     <div class="current-row sticky-bar">        -- sticky bar (stickiness lives here, not on the individual widgets — see "CSS" below), always visible on every main tab, two `.current-side` columns:
       <div class="current-side current-side-main">   -- AppShell-owned wrapper, stacks the following two:
-        <div id="currentTimer">                -- TimeModule-owned; static shell holding #currentTimerStatus (live-rendered by renderCurrentTimer()) plus the former "Timer starten" panel's controls, now laid out as three rows — status on top, `#ticketNumber`/`#ticketNumberPreset` on their own full-width `.ticket-row` (so a typed ticket number is never text-clipped by competing for space with the other fields), then one flex-wrapping controls row below (`.current-controls`: `#timerStartTime`, notes, time-info, buttons) — stretched with `justify-content: space-between` (see "CSS" below) to fill the left column's height next to `#pomodoroBar` below it on desktop widths (>1050px): #timerStartTime (label dropped, `aria-label` only), #taskNotes inside a `<details class="field-info current-notes-popover" data-ui-key="timerNotes">` — a text button "Notiz", not an icon (reuses the `.field-info` floating-popover pattern instead of a block `.compact-menu`, so opening it never changes the box's height), the (i) time-usage hint (also `.field-info`), and #startBtn/#stopBtn/#resetFormBtn as normal text buttons ("Start"/"Stop"/"Leeren", sized to match `.pomodoro-buttons button`) — moved here verbatim, "Timer starten" panel removed from the Zeit tab
+        <div id="currentTimer">                -- TimeModule-owned; static shell holding #currentTimerStatus (live-rendered by renderCurrentTimer()) plus the former "Timer starten" panel's controls, now laid out as three rows — status on top, `#ticketNumber`/`#ticketDescription`/`#ticketNumberPreset` on their own full-width `.ticket-row.ticket-row-split` (three columns: number, description, preset — so a typed ticket number is never text-clipped by competing for space with the other fields), then one flex-wrapping controls row below (`.current-controls`: `#timerStartTime`, notes, time-info, buttons) — stretched with `justify-content: space-between` (see "CSS" below) to fill the left column's height next to `#pomodoroBar` below it on desktop widths (>1050px): #timerStartTime (label dropped, `aria-label` only), #taskNotes inside a `<details class="field-info current-notes-popover" data-ui-key="timerNotes">` — a text button "Notiz", not an icon (reuses the `.field-info` floating-popover pattern instead of a block `.compact-menu`, so opening it never changes the box's height), the (i) time-usage hint (also `.field-info`), and #startBtn/#stopBtn/#resetFormBtn as normal text buttons ("Start"/"Stop"/"Leeren", sized to match `.pomodoro-buttons button`) — moved here verbatim, "Timer starten" panel removed from the Zeit tab
         <div id="pomodoroBar">                 -- TimeModule-owned, unchanged markup/JS from LocalTimetracker
       <div class="current-side current-side-aside">  -- AppShell-owned wrapper, stacks the following two:
         <div id="quickCapture">                 -- AppShell-owned; #quickCaptureInput + #quickCaptureBtn, calls LWT.tasks.captureTask(title) (no tab switch, no dialog)
@@ -172,7 +172,7 @@ The sticky bar has two columns now, both using `.current-side` (AppShell-owned):
 
 `renderCurrentTimer()`'s active-state markup puts the `.pill` ("● Aktiv"/"● Geplant") and the ticket name on the same flex row (`display:flex; gap:8px` inline style), with the start-time line below — mirroring the idle state's two-line shape ("Kein aktiver Timer" + subtitle) so switching between idle/active doesn't change `#currentTimerStatus`'s height and doesn't stress the `.current-side` height-matching described above.
 
-The timer's `#currentTimer` control row (`.current-controls`) is a flex-wrap row with compact fields (`.ticket-input-compact`, `.ticket-preset-compact`, `.time-input-compact` — narrower than the app's default `input`/`select` sizing) plus normal text buttons: the `#timerStartTime` input (no visible label, `aria-label` only — matches Pomodoro's own label-less duration `<select>`), a "Notiz" text button and the existing (i) time-usage hint, and `#startBtn`/`#stopBtn`/`#resetFormBtn` sized to match `.pomodoro-buttons button` (`min-height:36px`) so Start/Stop look visually identical to the Pomodoro timer's own Start/Stop. The notes field reuses `.field-info`'s floating-popover `<details>` pattern (the same one the (i) time-usage hint uses, restyled from a circular icon to a small text-button pill via `.current-notes-popover summary`) — **not** `.compact-menu` — specifically so opening it never changes `#currentTimer`'s box height, which a block-level `.compact-menu` expansion would (and which would, via the grid-stretch mechanism above, also perturb `.current-side`'s layout).
+The timer's `#currentTimer` control row (`.current-controls`) is a flex-wrap row with compact fields (`.ticket-input-compact` — used for both `#ticketNumber` and `#ticketDescription`, `.ticket-preset-compact`, `.time-input-compact` — narrower than the app's default `input`/`select` sizing) plus normal text buttons: the `#timerStartTime` input (no visible label, `aria-label` only — matches Pomodoro's own label-less duration `<select>`), a "Notiz" text button and the existing (i) time-usage hint, and `#startBtn`/`#stopBtn`/`#resetFormBtn` sized to match `.pomodoro-buttons button` (`min-height:36px`) so Start/Stop look visually identical to the Pomodoro timer's own Start/Stop. The notes field reuses `.field-info`'s floating-popover `<details>` pattern (the same one the (i) time-usage hint uses, restyled from a circular icon to a small text-button pill via `.current-notes-popover summary`) — **not** `.compact-menu` — specifically so opening it never changes `#currentTimer`'s box height, which a block-level `.compact-menu` expansion would (and which would, via the grid-stretch mechanism above, also perturb `.current-side`'s layout).
 
 ## Theming — owned exclusively by AppShell
 
@@ -196,7 +196,7 @@ If you're chasing a theme bug, it's in the boot script or AppShell — not in Ti
 ## Task ↔ time linking, precisely
 
 - `TimeModule.startTimer(overrideTaskId)` — the internal function now takes an optional `taskId`. Called with no argument by the normal Start button; called with the task's id by `LWT.time.startTimerFromTask`.
-- If no `overrideTaskId` is given, `resolveTaskIdForTicket(ticket)` tries a case-insensitive exact match against `window.LWT.tasks.searchableTasks()` (`externalRef` first, then `title`). No match → `taskId: null`, same as before the merge.
+- If no `overrideTaskId` is given, `resolveTaskIdForTicket(ticket)` tries a case-insensitive exact match against `window.LWT.tasks.searchableTasks()` (`externalRef` first, then `title`). No match → `taskId: null`, same as before the merge. `ticket` here is always the plain ticket number (see "Ticket number/description split" below) — `ticketDescription` never participates in the match.
 - `taskId` flows into `state.activeTimer`, then into the saved entry in both `internalStopTimer()` and `autoStopActiveTimerIfDayEnded()` (the end-of-day auto-stop path — both had to be updated, easy to miss if you touch this again).
 - `normalizeEntry`/`normalizeActiveTimer` coerce a non-string `taskId` back to `null` — same defensive-normalization posture as every other field, so malformed imported/legacy data can't crash rendering.
 - Tracked minutes are **never stored** — `getTrackedMs(taskId)` sums `getNetDurationMs(entry)` over `state.entries.filter(e => e.taskId === taskId)` fresh on every call. `taskMeta()` in TaskModule calls this (via `LWT.time.getTrackedMinutesLabel`) on every card render, so edits/deletes to time entries are reflected immediately without any cache-invalidation logic to maintain.
@@ -204,6 +204,45 @@ If you're chasing a theme bug, it's in the boot script or AppShell — not in Ti
 ## Storage migration, precisely
 
 The boot script's `LEGACY_MAP` is a flat list of `[oldKey, newKey]` pairs, copied only when `newKey` doesn't already hold a value — see [`data-model.md`](data-model.md#speicher-keys) for the full key table and [`backup.md`](backup.md#migration-von-den-einzel-apps) for the user-facing behavior. It runs synchronously, before TimeModule/TaskModule's own `loadState()` calls, so by the time either module reads `localStorage` the new keys are already populated if legacy data existed.
+
+## Ticket number/description split, precisely
+
+`entries[].ticket` used to be one free-text field; it's now the plain ticket number plus a
+sibling `ticketDescription`. Unlike the storage-key migration above, this is an **in-entry**
+migration with no `LEGACY_MAP` involved — it runs inside `normalizeEntry`/`normalizeActiveTimer`
+themselves (TimeModule), which is the one choke point every entry passes through regardless of
+source (`loadState()`, `importPayload()`, `restoreSnapshot()`):
+
+- Discriminator is the *presence* of `ticketDescription` on the raw record (even `''` counts) —
+  not whether the ticket text contains a `:`. So an already-migrated entry is never re-split,
+  even if its ticket number itself happens to contain a colon.
+- A record without `ticketDescription` goes through `splitLegacyTicket(raw)`, which cuts at the
+  first `:` — text before becomes `ticket`, text after becomes `ticketDescription`. No colon (or
+  nothing usable before it) → the whole value stays the ticket number, description empty.
+- The same pattern applies to remembered ticket suggestions (`customTickets`, persisted under
+  `local-work-tracker-v1-time-entries-ticket-suggestions`): they used to be a flat `string[]`,
+  now they're `{ ticket, description }` pairs. `normalizeTicketPair(value)` accepts either shape
+  (a bare string is run through `splitLegacyTicket`); `dedupeTicketPairs(pairs)` merges by
+  `ticket`, preferring a non-empty `description`. Every reader of `customTickets` — presets
+  dropdown, datalist, export/import, snapshot create/restore — goes through these two helpers.
+- The Zeit tab's Schnellauswahl (the three preset `<select>` elements and the shared
+  `#ticketSuggestions` datalist) always **displays** `Ticketnummer: Beschreibung` together
+  (`ticketOptionLabel`) but only ever **inserts** the ticket number into the input; the paired
+  description is applied separately (`applyPresetSelect`'s third argument, or the `input`
+  listener installed by `attachTicketAutofill` when a typed number matches a known ticket and
+  the description field is still empty).
+- The group evaluation ("Gruppenauswertung", `buildSummaryRows`) always groups by `ticket` — the
+  key is unaffected by the split since it was already the bare ticket string. It additionally
+  tracks a `Map<description, latestStartTs>` per group and surfaces the description of the most
+  recently started entry, with a `descriptionCount`/`otherDescriptions` hint when a ticket has
+  more than one. A small clipboard-copy button (`ticketCopyButton`) sits next to the ticket
+  number in that table — not in the entries list (an explicit, narrower choice than
+  "everywhere a ticket number appears"). The sticky bar's running timer (`renderCurrentTimer`)
+  gets the same copy-to-clipboard behavior but through a different affordance: the ticket
+  number itself (`.ticket-copy-label`, dashed underline, `role="button"`, keyboard-operable) is
+  clickable and copies on click/Enter/Space, rather than adding a separate icon button — there
+  isn't enough horizontal room in the compact sticky bar for both the ticket text and an icon
+  to stay comfortably tappable.
 
 ## If you're about to change something
 

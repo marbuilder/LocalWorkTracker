@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T20 ticket number/description split</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T20 Ticket Number / Description Split</h1>
+  <p>Exercises splitting the legacy single-field <code>ticket</code> into a ticket number plus an
+  optional description: legacy "NUMBER: text" values are split on the first colon exactly once,
+  an already-migrated entry (which always carries a string <code>ticketDescription</code>, even
+  <code>''</code>) is never re-split even if its number contains a colon, ticket-suggestion pairs
+  round-trip through both the string (legacy) and object (current) shapes, the group evaluation
+  groups purely by ticket number while surfacing the most recent description, and the CSV export
+  keeps the two in separate columns.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      'use strict';
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      const MAX_TICKET = 60;
+      const MAX_TICKET_DESCRIPTION = 120;
+
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).trim().slice(0, maxLen);
+      }
+
+      // Mirrors splitLegacyTicket() in index.html's time module.
+      function splitLegacyTicket(raw) {
+        const value = sanitizeText(raw, MAX_TICKET + MAX_TICKET_DESCRIPTION + 2);
+        const idx = value.indexOf(':');
+        if (idx < 0) return { ticket: sanitizeText(value, MAX_TICKET), description: '' };
+        const ticket = sanitizeText(value.slice(0, idx), MAX_TICKET);
+        if (!ticket) return { ticket: sanitizeText(value, MAX_TICKET), description: '' };
+        const description = sanitizeText(value.slice(idx + 1), MAX_TICKET_DESCRIPTION);
+        return { ticket, description };
+      }
+
+      // Mirrors normalizeTicketPair() in index.html's time module.
+      function normalizeTicketPair(value) {
+        if (value && typeof value === 'object') {
+          return {
+            ticket: sanitizeText(value.ticket, MAX_TICKET),
+            description: sanitizeText(value.description || '', MAX_TICKET_DESCRIPTION)
+          };
+        }
+        return splitLegacyTicket(value);
+      }
+
+      function dedupeTicketPairs(pairs) {
+        const byTicket = new Map();
+        pairs.forEach(pair => {
+          if (!pair.ticket) return;
+          const existing = byTicket.get(pair.ticket);
+          if (!existing || (pair.description && !existing.description)) {
+            byTicket.set(pair.ticket, pair);
+          }
+        });
+        return [...byTicket.values()].sort((a, b) => a.ticket.localeCompare(b.ticket, 'de'));
+      }
+
+      // Mirrors the migration branch inside normalizeEntry() in index.html's time module.
+      function normalizeEntry(e) {
+        const pair = typeof e.ticketDescription === 'string'
+          ? { ticket: sanitizeText(e.ticket, MAX_TICKET), description: sanitizeText(e.ticketDescription, MAX_TICKET_DESCRIPTION) }
+          : splitLegacyTicket(e.ticket);
+        return {
+          id: typeof e.id === 'string' ? e.id : 'id',
+          ticket: pair.ticket,
+          ticketDescription: pair.description,
+          startTs: Number(e.startTs),
+          endTs: Number(e.endTs),
+          pauseMinutes: Number(e.pauseMinutes || 0)
+        };
+      }
+
+      // Mirrors getNetDurationMs()/getGroupKey()/buildSummaryRows() in index.html's time module.
+      function getNetDurationMs(entry) {
+        return Math.max(0, (entry.endTs - entry.startTs) - ((entry.pauseMinutes || 0) * 60000));
+      }
+      function buildSummaryRows(filtered) {
+        const groups = new Map();
+        filtered.forEach(entry => {
+          const key = entry.ticket || 'Ohne Ticket';
+          const row = groups.get(key) || { key, ms: 0, count: 0, descriptions: new Map() };
+          row.ms += getNetDurationMs(entry);
+          row.count += 1;
+          if (entry.ticketDescription) {
+            const latest = row.descriptions.get(entry.ticketDescription) || 0;
+            row.descriptions.set(entry.ticketDescription, Math.max(latest, entry.startTs));
+          }
+          groups.set(key, row);
+        });
+        return [...groups.values()].map(row => {
+          const descEntries = [...row.descriptions.entries()].sort((a, b) => b[1] - a[1]);
+          return { ...row, description: descEntries.length ? descEntries[0][0] : '', descriptionCount: descEntries.length };
+        }).sort((a, b) => b.ms - a.ms);
+      }
+
+      // Mirrors the row-building in exportCsv() in index.html's time module.
+      function buildCsvRow(e) {
+        return ['Datum', 'Start', 'Ende', e.ticket, e.ticketDescription || '', String(e.pauseMinutes || 0)];
+      }
+
+      // 1. Legacy split on the first ':'.
+      assert(
+        'splitLegacyTicket splits "ABC-123: Login kaputt" into ticket + description',
+        JSON.stringify(splitLegacyTicket('ABC-123: Login kaputt')) === JSON.stringify({ ticket: 'ABC-123', description: 'Login kaputt' })
+      );
+
+      // 2. No colon -> everything stays the ticket number.
+      assert(
+        'a ticket without a colon stays whole, description empty',
+        JSON.stringify(splitLegacyTicket('ABC-999')) === JSON.stringify({ ticket: 'ABC-999', description: '' })
+      );
+
+      // 3. Already-migrated entries are never re-split, even with a colon in the number.
+      const migrated = normalizeEntry({ id: 'e1', ticket: 'ABC-1:weird', ticketDescription: '', startTs: 0, endTs: 1000 });
+      assert(
+        'an entry that already carries ticketDescription is not re-split',
+        migrated.ticket === 'ABC-1:weird' && migrated.ticketDescription === '',
+        migrated
+      );
+      const legacy = normalizeEntry({ id: 'e2', ticket: 'ABC-2: Text', startTs: 0, endTs: 1000 });
+      assert(
+        'a legacy entry without ticketDescription is split on load',
+        legacy.ticket === 'ABC-2' && legacy.ticketDescription === 'Text',
+        legacy
+      );
+
+      // 4. normalizeTicketPair accepts both shapes and dedupeTicketPairs merges by ticket.
+      const pairs = dedupeTicketPairs([
+        normalizeTicketPair('ABC-3: Alte Beschreibung'),
+        normalizeTicketPair({ ticket: 'ABC-3', description: '' }),
+        normalizeTicketPair({ ticket: 'ABC-4', description: 'Neu' })
+      ]);
+      assert(
+        'normalizeTicketPair handles strings and objects; dedupe keeps a non-empty description',
+        pairs.length === 2 && pairs.find(p => p.ticket === 'ABC-3').description === 'Alte Beschreibung',
+        pairs
+      );
+
+      // 5. Grouping by ticket ignores differing descriptions, keeps the most recent one.
+      const entries = [
+        normalizeEntry({ id: 'e3', ticket: 'ABC-5', ticketDescription: 'Alt', startTs: 1000, endTs: 1000 + 30 * 60000 }),
+        normalizeEntry({ id: 'e4', ticket: 'ABC-5', ticketDescription: 'Neu', startTs: 2000, endTs: 2000 + 15 * 60000 })
+      ];
+      const rows = buildSummaryRows(entries);
+      assert(
+        'two entries with the same ticket number but different descriptions form one group',
+        rows.length === 1 && rows[0].key === 'ABC-5' && rows[0].descriptionCount === 2,
+        rows
+      );
+      assert(
+        'the group shows the description of the most recent entry',
+        rows[0].description === 'Neu',
+        rows[0]
+      );
+
+      // 6. CSV keeps ticket and description in separate columns.
+      const csvRow = buildCsvRow(legacy);
+      assert(
+        'CSV row carries ticket number and description as separate fields',
+        csvRow[3] === 'ABC-2' && csvRow[4] === 'Text',
+        csvRow
+      );
+
+      const tbody = document.getElementById('results');
+      let allPass = true;
+      results.forEach(r => {
+        if (!r.pass) allPass = false;
+        const tr = document.createElement('tr');
+        const c1 = document.createElement('td'); c1.textContent = r.name;
+        const c2 = document.createElement('td'); c2.textContent = r.pass ? 'PASS' : 'FAIL'; c2.className = r.pass ? 'pass' : 'fail';
+        const c3 = document.createElement('td'); c3.textContent = r.details;
+        tr.append(c1, c2, c3);
+        tbody.appendChild(tr);
+      });
+      document.getElementById('status').textContent = allPass
+        ? `All ${results.length} checks passed.`
+        : `${results.filter(r => !r.pass).length} of ${results.length} checks failed.`;
+      document.getElementById('status').className = allPass ? 'pass' : 'fail';
+    })();
+  </script>
+</body>
+</html>

@@ -33,7 +33,7 @@ The two areas are linked: a time entry may carry an optional `taskId` back to a 
 Each module keeps its own internal state, storage keys, and rendering — they do **not** share DOM ids beyond a handful of deliberately centralized elements (`#themeToggleBtn`, `#toastRoot`, the sticky `#currentTimer`/`#pomodoroBar` pair, the AppShell-owned `#quickCapture`/`#notesWidget` (`#notesTitle`, `#notesStatus`, `#notesInput`) pair, and the Daten-tab controls — `#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`). Task- and time-specific ids that existed in both source apps were prefixed (`task-tabbar`, `task-viewRoot`, `taskConfirmDialog`, `taskPromptDialog`, `timeEditDialog`, `timeConfirmDialog`) to avoid collisions.
 
 **`window.LWT` surface:**
-- `LWT.time.getActiveTimer()`, `LWT.time.startTimerFromTask(taskId, ticketLabel, notes)`, `LWT.time.getTrackedMinutesLabel(taskId)`, `LWT.time.getExportPayload()`, `LWT.time.exportCsv()`, `LWT.time.importPayload(parsed)`, `LWT.time.clearAllData()`, `LWT.time.refreshChartTheme()`.
+- `LWT.time.getActiveTimer()`, `LWT.time.startTimerFromTask(taskId, ticketLabel, ticketDescription, notes)`, `LWT.time.getTrackedMinutesLabel(taskId)`, `LWT.time.getExportPayload()`, `LWT.time.exportCsv()`, `LWT.time.importPayload(parsed)`, `LWT.time.clearAllData()`, `LWT.time.refreshChartTheme()`.
 - `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`, `LWT.tasks.captureTask(title)` (used by AppShell's global sticky-bar quick-capture widget).
 - `LWT.shell.switchTab(name)` — `'time'`, `'tasks'`, or `'daten'`.
 - `LWT.notes.getExportPayload()`, `LWT.notes.importPayload(parsed)` (no-op if `parsed.notes` is absent — never wipes the existing note), `LWT.notes.clearAllData()` — the sticky-bar notes widget (plain-text scratchpad, no Markdown rendering).
@@ -73,7 +73,8 @@ Same as LocalTimetracker, **plus `taskId`**:
 ```js
 {
   id: string,
-  ticket: string,          // sanitized, max 60 characters
+  ticket: string,             // the ticket number only, sanitized, max 60 characters
+  ticketDescription: string,  // free-text description, sanitized, max 120 characters
   notes: string,           // sanitized, max 2000 characters
   startTs: number, endTs: number,   // ms epoch, endTs > startTs
   pauseMinutes: number,    // 0..1440
@@ -85,7 +86,9 @@ Same as LocalTimetracker, **plus `taskId`**:
 
 A running timer (`state.activeTimer`) has the same shape as an entry minus `endTs`, plus `taskId`.
 
-`taskId` is set either explicitly (the "Heute" ▶ button) or resolved automatically when the typed ticket text matches an existing task's `externalRef` or title (`resolveTaskIdForTicket`, case-insensitive exact match). Tracked minutes per task are computed on render (`getTrackedMs`/`getTrackedMinutesLabel`) — never persisted on the task itself, so they stay correct even after entries are edited or deleted.
+`taskId` is set either explicitly (the "Heute" ▶ button) or resolved automatically when the typed ticket number matches an existing task's `externalRef` or title (`resolveTaskIdForTicket`, case-insensitive exact match — matched against `ticket` only, never `ticketDescription`). Tracked minutes per task are computed on render (`getTrackedMs`/`getTrackedMinutesLabel`) — never persisted on the task itself, so they stay correct even after entries are edited or deleted.
+
+`ticket` and `ticketDescription` used to be one combined free-text field (`"ABC-123: Kurzbeschreibung"`); every eingehende record (load, import, snapshot restore) still runs through `normalizeEntry`/`normalizeActiveTimer`, whose migration branch (keyed on whether `ticketDescription` is present at all, even as `''`) splits a legacy value at its first `:` via `splitLegacyTicket` exactly once. Remembered ticket suggestions (`local-work-tracker-v1-time-entries-ticket-suggestions`) are `{ ticket, description }` pairs for the same reason — `normalizeTicketPair` accepts both the old bare-string shape and the new pair shape. The Zeit tab's Schnellauswahl (preset `<select>` and the `#ticketSuggestions` datalist) always displays `Ticketnummer: Beschreibung` together but inserts only the ticket number; the group evaluation ("Gruppenauswertung") always groups by `ticket`, showing the description of the most recently started entry when a ticket has more than one, plus a copy-to-clipboard button next to the number.
 
 ### Notizen (`local-work-tracker-v1-notes`)
 
