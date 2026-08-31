@@ -2658,8 +2658,26 @@
         const isPending = elapsedMs < 0;
         dom.currentTimerStatus.innerHTML = '';
         const left = document.createElement('div');
-        const descriptionHtml = a.ticketDescription ? ` <span class="muted">${escapeHtml(a.ticketDescription)}</span>` : '';
-        left.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><div class="pill${isPending ? ' pending' : ''}">${isPending ? '● Geplant' : '● Aktiv'}</div><strong>${escapeHtml(a.ticket || '—')}</strong>${descriptionHtml}</div><div class="muted" style="margin-top:4px;">Start: ${formatDateTime(a.startTs)}</div>`;
+        const topRow = document.createElement('div');
+        topRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+        const pill = document.createElement('div');
+        pill.className = 'pill' + (isPending ? ' pending' : '');
+        pill.textContent = isPending ? '● Geplant' : '● Aktiv';
+        const ticketLabel = document.createElement('strong');
+        ticketLabel.textContent = a.ticket || '—';
+        topRow.append(pill, ticketLabel);
+        if (a.ticket) topRow.appendChild(ticketCopyButton(a.ticket));
+        if (a.ticketDescription) {
+          const desc = document.createElement('span');
+          desc.className = 'muted';
+          desc.textContent = a.ticketDescription;
+          topRow.appendChild(desc);
+        }
+        const startLine = document.createElement('div');
+        startLine.className = 'muted';
+        startLine.style.marginTop = '4px';
+        startLine.textContent = `Start: ${formatDateTime(a.startTs)}`;
+        left.append(topRow, startLine);
         const right = document.createElement('div');
         right.innerHTML = `<div class="live-duration">${isPending ? '-' : ''}${formatDuration(Math.abs(elapsedMs))}</div><div class="muted">${isPending ? 'Beginnt in' : 'Live-Laufzeit'}</div>`;
         dom.currentTimerStatus.append(left, right);
