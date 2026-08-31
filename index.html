@@ -264,6 +264,11 @@
     .current-side { display: flex; flex-direction: column; gap: 12px; justify-content: space-between; min-width: 0; }
     .current-side > #currentTimer,
     .current-side > #notesWidget { flex: 1 1 auto; }
+    /* .current's backdrop-filter creates a stacking context on every element with that class;
+       without an explicit z-index here, #pomodoroBar (later in the DOM, same auto z-index)
+       paints on top of #currentTimer's own popovers (.field-info-tip) when they overflow past
+       its box, clipping them visually. */
+    #currentTimer { position: relative; z-index: 2; }
     .current-compact {
       flex-direction: column; align-items: stretch; justify-content: space-between;
     }
