@@ -73,7 +73,7 @@
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
 
-        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
 
@@ -187,6 +187,11 @@
               id: 'd', title: 'Eskaliert ohne Datum', priority: 'nice', effort: 'toolarge', status: 'escalated',
               externalRef: '  PROJ-1234  ', createdAt: 5000, updatedAt: 6000, doneAt: null
             },
+            // dropped straight from the inbox, never triaged -> must stay dropped
+            {
+              id: 'g', title: 'Direkt verworfen', priority: null, effort: null, status: 'dropped',
+              createdAt: 7000, updatedAt: 7000, doneAt: 7000
+            },
             // malformed records that must be dropped entirely
             { id: 'e', title: '   ' },
             { id: 'f' },
@@ -203,8 +208,12 @@
         const byId = id => n.tasks.find(t => t.id === id);
 
         assert('malformed records are dropped',
-          n.tasks.length === 4 && !byId('e') && !byId('f'),
+          n.tasks.length === 5 && !byId('e') && !byId('f'),
           JSON.stringify(n.tasks.map(t => t.id)));
+
+        assert('a task dropped without triage survives a reload as dropped',
+          byId('g').status === 'dropped' && byId('g').doneAt === 7000,
+          JSON.stringify(byId('g')));
 
         assert('text fields are sanitized and carryCount is clamped',
           byId('a').title === 'Renovate-PRs  aufräumen' &&
