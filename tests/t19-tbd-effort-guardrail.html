@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T19 tbd effort guardrail</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T19 "Rahmen unklar" (tbd) Effort Guardrail</h1>
+  <p>Exercises the third effort guardrail added alongside "quick" and "toolarge": a task tagged <code>tbd</code> ("Rahmen unklar") can't be planned into a week — <code>planTask</code> refuses it just like <code>toolarge</code> — and a planned task that's reclassified as <code>tbd</code> is bounced back to the backlog by <code>changeEffort</code>. Logic is duplicated inline from <code>index.html</code>'s TaskModule, per project convention.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      'use strict';
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      // Mirrors EFFORTS/EFFORT_KEYS in index.html's TaskModule.
+      const EFFORTS = [
+        { key: 'quick', label: '≤ 15 min' },
+        { key: 'small', label: '≤ 1 Std.' },
+        { key: 'medium', label: '≤ ½ Tag' },
+        { key: 'toolarge', label: 'Größer — Story' },
+        { key: 'tbd', label: 'Rahmen unklar' }
+      ];
+      const EFFORT_KEYS = EFFORTS.map(e => e.key);
+
+      function makeTask(overrides) {
+        return Object.assign({
+          id: 'id-' + Math.random().toString(36).slice(2),
+          priority: 'eighty',
+          effort: 'small',
+          status: 'backlog',
+          plannedWeek: null,
+          todayFlag: false,
+          updatedAt: Date.now()
+        }, overrides);
+      }
+
+      // Mirrors planTask()'s guardrail in index.html's TaskModule.
+      function planTask(task, weekKey) {
+        if (!task || !task.priority || !task.effort) return false;
+        if (task.effort === 'toolarge' || task.effort === 'tbd') return false;
+        task.status = 'planned';
+        task.plannedWeek = weekKey;
+        return true;
+      }
+
+      // Mirrors changeEffort()'s retroactive backlog-bounce in index.html's TaskModule.
+      function changeEffort(task, effort) {
+        if (!task || !EFFORT_KEYS.includes(effort) || task.effort === effort) return;
+        task.effort = effort;
+        if (task.status === 'planned' && (effort === 'toolarge' || effort === 'tbd')) {
+          task.status = 'backlog';
+          task.plannedWeek = null;
+          task.todayFlag = false;
+        }
+      }
+
+      // Mirrors guardFooter()'s action set per effort in index.html's TaskModule
+      // (the button labels/handlers that would render for each branch).
+      function guardActionsFor(effort) {
+        if (effort === 'tbd') return ['backlog', 'drop'];
+        if (effort === 'quick') return ['done', 'plan-anyway', 'backlog'];
+        if (effort === 'toolarge') return ['escalate', 'drop'];
+        return ['plan', 'backlog', 'done'];
+      }
+
+      // Mirrors renderBacklogCard()'s primary-action selection in index.html's TaskModule.
+      function backlogPrimaryAction(effort) {
+        if (effort === 'toolarge') return 'escalate';
+        if (effort === 'tbd') return null;
+        return 'plan';
+      }
+
+      // ── EFFORTS registration ──────────────────────────────────────────────
+      assert('tbd is a recognized effort key', EFFORT_KEYS.includes('tbd'));
+
+      // ── planTask guardrail ─────────────────────────────────────────────
+      const t1 = makeTask({ effort: 'tbd', status: 'backlog' });
+      const planned1 = planTask(t1, '2026-W10');
+      assert(
+        'planTask refuses a tbd task (like toolarge)',
+        planned1 === false && t1.status === 'backlog' && t1.plannedWeek === null,
+        t1
+      );
+
+      const t2 = makeTask({ effort: 'small', status: 'backlog' });
+      const planned2 = planTask(t2, '2026-W10');
+      assert(
+        'planTask still accepts a normal effort',
+        planned2 === true && t2.status === 'planned' && t2.plannedWeek === '2026-W10',
+        t2
+      );
+
+      // ── changeEffort retroactive guardrail ────────────────────────────
+      const t3 = makeTask({ effort: 'small', status: 'planned', plannedWeek: '2026-W10', todayFlag: true });
+      changeEffort(t3, 'tbd');
+      assert(
+        'changeEffort bounces a planned task back to backlog when reclassified as tbd',
+        t3.status === 'backlog' && t3.plannedWeek === null && t3.todayFlag === false && t3.effort === 'tbd',
+        t3
+      );
+
+      const t4 = makeTask({ effort: 'small', status: 'planned', plannedWeek: '2026-W10' });
+      changeEffort(t4, 'medium');
+      assert(
+        'changeEffort leaves a planned task alone for a non-guardrail effort',
+        t4.status === 'planned' && t4.plannedWeek === '2026-W10',
+        t4
+      );
+
+      // ── guard footer action set ────────────────────────────────────────
+      assert(
+        'guardFooter for tbd offers only backlog/drop, no plan action',
+        !guardActionsFor('tbd').includes('plan') &&
+        !guardActionsFor('tbd').includes('plan-anyway') &&
+        guardActionsFor('tbd')[0] === 'backlog',
+        JSON.stringify(guardActionsFor('tbd'))
+      );
+
+      // ── backlog card primary action ────────────────────────────────────
+      assert(
+        'renderBacklogCard offers no primary planning action for tbd',
+        backlogPrimaryAction('tbd') === null
+      );
+      assert(
+        'renderBacklogCard still offers "plan" for a normal effort',
+        backlogPrimaryAction('small') === 'plan'
+      );
+      assert(
+        'renderBacklogCard still offers "escalate" for toolarge (unaffected by tbd)',
+        backlogPrimaryAction('toolarge') === 'escalate'
+      );
+
+      // ── render ─────────────────────────────────────────────────────────
+      const tbody = document.getElementById('results');
+      let passCount = 0;
+      results.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = r.name;
+        const tdResult = document.createElement('td');
+        tdResult.textContent = r.pass ? 'PASS' : 'FAIL';
+        tdResult.className = r.pass ? 'pass' : 'fail';
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = r.details;
+        tr.append(tdName, tdResult, tdDetails);
+        tbody.appendChild(tr);
+        if (r.pass) passCount++;
+      });
+      document.getElementById('status').textContent =
+        `${passCount}/${results.length} checks passed.`;
+    })();
+  </script>
+</body>
+</html>

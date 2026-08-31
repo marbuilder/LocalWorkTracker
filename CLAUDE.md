@@ -7,7 +7,7 @@
 A sticky bar at the top always shows the live timer (now including full start/stop controls — ticket selection, optional start time, collapsible notes), the Pomodoro timer, and a global quick-capture field for new tasks, regardless of which of the two main tabs is active. Quick-capturing a task never switches tabs — the task is created in the background (status `inbox`) and a toast confirms it.
 
 - **Zeit** — the former LocalTimetracker: start/stop a timer, log manual entries, filter/analyze, Pomodoro, ticket presets, snapshots.
-- **Aufgaben** — the former LocalTasks: Posteingang (inbox capture) → Triage (priority/effort) → Woche (weekly planning + "Heute" focus list) → Archiv, with the same two guardrails as before (quick wins pushed to "just do it now"; anything bigger than half a day is escalated to the company system, never scheduled here).
+- **Aufgaben** — the former LocalTasks: Posteingang (inbox capture) → Triage (priority/effort) → Woche (weekly planning + "Heute" focus list) → Archiv, with the same guardrails as before (quick wins pushed to "just do it now"; anything bigger than half a day is escalated to the company system, never scheduled here) plus a third: effort `tbd` ("Rahmen unklar") for work whose scope isn't known yet, which is routed to the backlog instead of being planned.
 
 The two areas are linked: a time entry may carry an optional `taskId` back to a task, task cards show cumulative tracked time, and the "Heute" focus list can start a timer directly on a task via a ▶ button.
 
@@ -30,12 +30,13 @@ The two areas are linked: a time entry may carry an optional `taskId` back to a 
 
 **Read [`docs/architecture.md`](docs/architecture.md) before making a structural change** (new cross-module feature, renamed/removed DOM id, anything touching the sticky bar, tab switching, theming, or the Daten tab). It has the full DOM tree, the renamed-id table, the complete `window.LWT` surface with what each method does and who calls it, and a "where do I make this change" decision guide — everything below in this section is the short version.
 
-Each module keeps its own internal state, storage keys, and rendering — they do **not** share DOM ids beyond a handful of deliberately centralized elements (`#themeToggleBtn`, `#toastRoot`, the sticky `#currentTimer`/`#pomodoroBar` pair, and the Daten-tab controls — `#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`). Task- and time-specific ids that existed in both source apps were prefixed (`task-tabbar`, `task-viewRoot`, `taskConfirmDialog`, `taskPromptDialog`, `timeEditDialog`, `timeConfirmDialog`) to avoid collisions.
+Each module keeps its own internal state, storage keys, and rendering — they do **not** share DOM ids beyond a handful of deliberately centralized elements (`#themeToggleBtn`, `#toastRoot`, the sticky `#currentTimer`/`#pomodoroBar` pair, the AppShell-owned `#quickCapture`/`#notesWidget` (`#notesTitle`, `#notesStatus`, `#notesInput`) pair, and the Daten-tab controls — `#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`). Task- and time-specific ids that existed in both source apps were prefixed (`task-tabbar`, `task-viewRoot`, `taskConfirmDialog`, `taskPromptDialog`, `timeEditDialog`, `timeConfirmDialog`) to avoid collisions.
 
 **`window.LWT` surface:**
 - `LWT.time.getActiveTimer()`, `LWT.time.startTimerFromTask(taskId, ticketLabel, notes)`, `LWT.time.getTrackedMinutesLabel(taskId)`, `LWT.time.getExportPayload()`, `LWT.time.exportCsv()`, `LWT.time.importPayload(parsed)`, `LWT.time.clearAllData()`, `LWT.time.refreshChartTheme()`.
 - `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`, `LWT.tasks.captureTask(title)` (used by AppShell's global sticky-bar quick-capture widget).
 - `LWT.shell.switchTab(name)` — `'time'`, `'tasks'`, or `'daten'`.
+- `LWT.notes.getExportPayload()`, `LWT.notes.importPayload(parsed)` (no-op if `parsed.notes` is absent — never wipes the existing note), `LWT.notes.clearAllData()` — the sticky-bar notes widget (plain-text scratchpad, no Markdown rendering).
 
 When adding to either module, prefer extending this surface over reaching into the other module's internals directly.
 
@@ -52,7 +53,7 @@ Unchanged from LocalTasks:
   notes: string,          // sanitized, max 2000 characters
   context: string,        // sanitized, max 40 characters
   priority: 'zero' | 'eighty' | 'nice' | null,
-  effort: 'quick' | 'small' | 'medium' | 'toolarge' | null,
+  effort: 'quick' | 'small' | 'medium' | 'toolarge' | 'tbd' | null,
   status: 'inbox' | 'backlog' | 'planned' | 'done' | 'dropped' | 'escalated',
   plannedWeek: string | null,   // ISO week key 'YYYY-Www'
   todayFlag: boolean,           // member of the "Heute" focus list
@@ -86,6 +87,20 @@ A running timer (`state.activeTimer`) has the same shape as an entry minus `endT
 
 `taskId` is set either explicitly (the "Heute" ▶ button) or resolved automatically when the typed ticket text matches an existing task's `externalRef` or title (`resolveTaskIdForTicket`, case-insensitive exact match). Tracked minutes per task are computed on render (`getTrackedMs`/`getTrackedMinutesLabel`) — never persisted on the task itself, so they stay correct even after entries are edited or deleted.
 
+### Notizen (`local-work-tracker-v1-notes`)
+
+The sticky-bar notes widget — a plain-text scratchpad, not tied to any task, for jotting things down (optionally in Markdown as a personal convention; the app does **not** parse or render it):
+
+```js
+{
+  version: 1,
+  text: string,      // max 20,000 characters, newlines/tabs preserved
+  updatedAt: number  // ms epoch
+}
+```
+
+Sanitized with `sanitizeNotes(value)` (AppShell), not the modules' `sanitizeText(value, maxLen)` — `sanitizeText` strips all C0 control characters including `\n`/`\t`, which would collapse a multi-line note to one line. `sanitizeNotes` normalizes `\r\n`/`\r` to `\n`, strips other control characters, and truncates at 20,000 characters, but keeps `\n` and `\t`.
+
 ## Storage keys
 
 | Key | Holds |
@@ -97,6 +112,7 @@ A running timer (`state.activeTimer`) has the same shape as an entry minus `endT
 | `local-work-tracker-v1-time-entries-ui-state` | collapsed/expanded `<details>` panels in the Zeit tab |
 | `local-work-tracker-v1-time-entries-pomodoro` | Pomodoro timer state |
 | `local-work-tracker-v1-time-entries-snapshot-*` | manual local backups (Zeit tab) |
+| `local-work-tracker-v1-notes` | sticky-bar notes widget (plain text, no rendering) |
 | `local-work-tracker-v1-theme` | `'light'` \| `'dark'`, owned exclusively by AppShell |
 
 ### Legacy migration
