@@ -240,8 +240,10 @@
       backdrop-filter: saturate(140%) blur(6px);
       -webkit-backdrop-filter: saturate(140%) blur(6px);
     }
-    .current.sticky-bar {
+    .current-row.sticky-bar {
       position: sticky; top: 8px; z-index: 5;
+    }
+    .current-row.sticky-bar .current {
       box-shadow: 0 8px 24px rgba(0,0,0,.18);
     }
     .current .live-duration {
@@ -251,10 +253,12 @@
     }
     .current-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 12px;
     }
-    .current-side { display: flex; flex-direction: column; gap: 12px; justify-content: space-between; }
+    .current-side { display: flex; flex-direction: column; gap: 12px; justify-content: space-between; min-width: 0; }
+    .current-side > #currentTimer,
+    .current-side > #notesWidget { flex: 1 1 auto; }
     .current-compact {
       flex-direction: column; align-items: stretch; justify-content: space-between;
     }
@@ -284,6 +288,26 @@
     .pomodoro-controls select:disabled,
     .pomodoro-buttons button:disabled {
       opacity: .5; cursor: not-allowed;
+    }
+    .notes-widget {
+      flex-direction: column; align-items: stretch; gap: 8px;
+      min-height: 132px;
+    }
+    .notes-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      flex: 0 0 auto;
+    }
+    .notes-title {
+      margin: 0; font-size: 13px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .notes-status { font-size: 12px; white-space: nowrap; }
+    .notes-input {
+      flex: 1 1 0; min-height: 0; resize: none;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--panel-2); color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px; line-height: 1.5;
     }
     .pill {
       display: inline-flex; gap: 8px; align-items: center;
@@ -444,6 +468,9 @@
       .stats { grid-template-columns: repeat(2, 1fr); }
       .day-nav { grid-template-columns: repeat(2, 1fr); }
       .current-row { grid-template-columns: 1fr; }
+      .current-row.sticky-bar { position: static; }
+      .notes-widget { min-height: 0; }
+      .notes-input { min-height: 140px; max-height: 40vh; }
     }
     @media (max-width: 700px) {
       .row { grid-template-columns: 1fr; }
@@ -713,6 +740,7 @@
     .chips button.active.prio-zero { background: #a12c2c; border-color: #a12c2c; }
     .chips button.active.prio-eighty { background: #8f6111; border-color: #8f6111; }
     .chips button.active.effort-toolarge { background: #7f2c2c; border-color: #7f2c2c; }
+    .chips button.active.effort-tbd { background: #8f6111; border-color: #8f6111; }
 
     /* ── Post-hoc edit panel ───────────────────────────────────── */
     .edit-panel {
@@ -730,6 +758,7 @@
     }
     .guard.quick { border-color: rgba(48,196,141,.45); background: rgba(48,196,141,.08); }
     .guard.toolarge { border-color: rgba(255,107,107,.45); background: rgba(255,107,107,.08); }
+    .guard.tbd { border-color: rgba(255,176,32,.45); background: rgba(255,176,32,.08); }
     .guard-msg { font-size: 13px; line-height: 1.5; }
     .guard-msg b { color: var(--text); }
     .guard-actions { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -899,42 +928,42 @@
 
     <div id="task-backupBanner" hidden></div>
 
-    <div class="current-row">
-      <div id="currentTimer" class="current current-compact sticky-bar" aria-live="polite">
-        <div id="currentTimerStatus" class="current-status"></div>
-        <div class="ticket-row current-ticket-row">
-          <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
-          <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
-            <option value="">Vorauswahl…</option>
-          </select>
-        </div>
-        <div class="current-controls">
-          <input id="timerStartTime" type="time" class="time-input-compact" step="60" aria-label="Uhrzeit (optional, heute)" placeholder="Uhrzeit">
-          <details class="field-info current-time-info">
-            <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
-            <div class="field-info-tip">
-              <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
-              <b>Beim Start ausgefüllt</b><br>Setzt die Startzeit; Feld leert sich danach automatisch.<br><br>
-              <b>Beim Stop ausgefüllt</b><br>Setzt die Endzeit des laufenden Timers.<br><br>
-              <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
+    <div class="current-row sticky-bar">
+      <div class="current-side current-side-main">
+        <div id="currentTimer" class="current current-compact" aria-live="polite">
+          <div id="currentTimerStatus" class="current-status"></div>
+          <div class="ticket-row current-ticket-row">
+            <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+            <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
+              <option value="">Vorauswahl…</option>
+            </select>
+          </div>
+          <div class="current-controls">
+            <input id="timerStartTime" type="time" class="time-input-compact" step="60" aria-label="Uhrzeit (optional, heute)" placeholder="Uhrzeit">
+            <details class="field-info current-time-info">
+              <summary aria-label="Hinweise zur Uhrzeiteingabe">i</summary>
+              <div class="field-info-tip">
+                <b>Feld leer</b><br>Start und Stop verwenden die aktuelle Uhrzeit.<br><br>
+                <b>Beim Start ausgefüllt</b><br>Setzt die Startzeit; Feld leert sich danach automatisch.<br><br>
+                <b>Beim Stop ausgefüllt</b><br>Setzt die Endzeit des laufenden Timers.<br><br>
+                <b>Timer wechseln</b><br>Die Uhrzeit wird als Endzeit des alten und gleichzeitig als Startzeit des neuen Eintrags verwendet.
+              </div>
+            </details>
+            <details class="field-info current-notes-popover" data-ui-key="timerNotes">
+              <summary aria-label="Notiz hinzufügen">Notiz</summary>
+              <div class="field-info-tip current-notes-tip">
+                <label for="taskNotes">Notiz</label>
+                <textarea id="taskNotes" placeholder="Optional"></textarea>
+              </div>
+            </details>
+            <div class="toolbar current-toolbar">
+              <button id="startBtn" class="good">Start</button>
+              <button id="stopBtn" class="warn">Stop</button>
+              <button id="resetFormBtn" class="ghost" title="Felder leeren" aria-label="Felder leeren">Leeren</button>
             </div>
-          </details>
-          <details class="field-info current-notes-popover" data-ui-key="timerNotes">
-            <summary aria-label="Notiz hinzufügen">Notiz</summary>
-            <div class="field-info-tip current-notes-tip">
-              <label for="taskNotes">Notiz</label>
-              <textarea id="taskNotes" placeholder="Optional"></textarea>
-            </div>
-          </details>
-          <div class="toolbar current-toolbar">
-            <button id="startBtn" class="good">Start</button>
-            <button id="stopBtn" class="warn">Stop</button>
-            <button id="resetFormBtn" class="ghost" title="Felder leeren" aria-label="Felder leeren">Leeren</button>
           </div>
         </div>
-      </div>
-      <div class="current-side">
-        <div id="pomodoroBar" class="current pomodoro-bar sticky-bar" aria-live="polite">
+        <div id="pomodoroBar" class="current pomodoro-bar" aria-live="polite">
           <div class="pomodoro-info">
             <div class="pill" id="pomodoroPill">⏱ Pomodoro bereit</div>
             <div class="pomodoro-controls">
@@ -957,12 +986,21 @@
             <div class="muted" id="pomodoroSubtitle">Bereit</div>
           </div>
         </div>
-        <div id="quickCapture" class="current quick-capture sticky-bar" aria-live="polite">
+      </div>
+      <div class="current-side current-side-aside">
+        <div id="quickCapture" class="current quick-capture" aria-live="polite">
           <div class="capture-row">
             <input id="quickCaptureInput" type="text" placeholder="Was ist dir aufgefallen?" autocomplete="off" maxlength="120">
             <button id="quickCaptureBtn" class="primary">Erfassen</button>
           </div>
         </div>
+        <section id="notesWidget" class="current notes-widget" aria-labelledby="notesTitle">
+          <div class="notes-head">
+            <h2 id="notesTitle" class="notes-title">Notizen</h2>
+            <span id="notesStatus" class="notes-status muted" aria-hidden="true"></span>
+          </div>
+          <textarea id="notesInput" class="notes-input" maxlength="20000" spellcheck="true" aria-label="Notizen (Markdown, wird nicht gerendert)" placeholder="Freie Notizen, z. B. in Markdown …"></textarea>
+        </section>
       </div>
     </div>
 
@@ -3281,7 +3319,8 @@
         { key: 'quick', label: '≤ 15 min' },
         { key: 'small', label: '≤ 1 Std.' },
         { key: 'medium', label: '≤ ½ Tag' },
-        { key: 'toolarge', label: 'Größer — Story' }
+        { key: 'toolarge', label: 'Größer — Story' },
+        { key: 'tbd', label: 'Rahmen unklar' }
       ];
       const STATUSES = [
         { key: 'inbox', label: 'Posteingang', terminal: false },
@@ -3718,13 +3757,14 @@
         const task = findTask(id);
         if (!task || !EFFORT_KEYS.includes(effort) || task.effort === effort) return;
         task.effort = effort;
-        // The upper guardrail still applies retroactively: a planned task
-        // can't stay scheduled once it's reclassified as oversized.
-        if (task.status === 'planned' && effort === 'toolarge') {
+        // The guardrails still apply retroactively: a planned task can't
+        // stay scheduled once it's reclassified as oversized or unframed.
+        if (task.status === 'planned' && (effort === 'toolarge' || effort === 'tbd')) {
           task.status = 'backlog';
           task.plannedWeek = null;
           task.todayFlag = false;
-          showToast('Als „Größer — Story" kann die Aufgabe nicht geplant bleiben — zurück ins Backlog.', { variant: 'warn' });
+          const reason = effort === 'toolarge' ? 'Als „Größer — Story"' : 'Mit unklarem Rahmen';
+          showToast(reason + ' kann die Aufgabe nicht geplant bleiben — zurück ins Backlog.', { variant: 'warn' });
         }
         touch(task);
         saveState();
@@ -3747,7 +3787,9 @@
         const task = findTask(id);
         if (!task || !task.priority || !task.effort) return;
         if (!parseIsoWeekKey(weekKey)) return;
-        if (task.effort === 'toolarge') return; // guardrail: oversized work is not planned here
+        // guardrail: oversized work is not planned here, and unframed work
+        // isn't planned until its scope is known.
+        if (task.effort === 'toolarge' || task.effort === 'tbd') return;
         task.status = 'planned';
         task.plannedWeek = weekKey;
         task.doneAt = null;
@@ -4230,7 +4272,21 @@
       }
 
       function guardFooter(task) {
-        // The two guardrails: quick wins should be done, oversized work escalated.
+        // The guardrails: quick wins should be done, oversized work escalated,
+        // and work with an unclear scope shouldn't be planned yet — it waits
+        // in the backlog until it's been framed.
+        if (task.effort === 'tbd') {
+          const guard = el('div', { className: 'guard tbd' });
+          const msg = el('div', { className: 'guard-msg' });
+          msg.appendChild(el('b', { text: 'Rahmen noch unklar. ' }));
+          msg.appendChild(document.createTextNode('Erst klären, was zu tun ist — bis dahin geht sie ins Backlog statt in eine Woche.'));
+          guard.appendChild(msg);
+          const actions = el('div', { className: 'guard-actions' });
+          actions.appendChild(button('Ins Backlog', { className: 'primary', onClick: () => moveToBacklog(task.id) }));
+          actions.appendChild(button('Verwerfen', { className: 'ghost', onClick: () => dropTask(task.id) }));
+          guard.appendChild(actions);
+          return guard;
+        }
         if (task.effort === 'quick') {
           const guard = el('div', { className: 'guard quick' });
           const msg = el('div', { className: 'guard-msg' });
@@ -4368,7 +4424,9 @@
         const actions = el('div', { className: 'task-actions' });
         if (task.effort === 'toolarge') {
           actions.appendChild(button('Als Story eskalieren', { className: 'primary', onClick: () => escalateTask(task.id) }));
-        } else {
+        } else if (task.effort !== 'tbd') {
+          // 'tbd' has no planning action here — the "Aufwand" chip below is
+          // the way out, once the scope is known.
           actions.appendChild(button(`In ${shortWeek(ui.weekKey)}`, {
             className: 'primary',
             title: 'In die angezeigte Kalenderwoche planen',
@@ -4765,6 +4823,9 @@
           payload.timeEntries = timePayload.entries;
           payload.ticketSuggestions = timePayload.ticketSuggestions;
         }
+        if (window.LWT && window.LWT.notes && typeof window.LWT.notes.getExportPayload === 'function') {
+          payload.notes = window.LWT.notes.getExportPayload();
+        }
         return payload;
       }
 
@@ -4855,7 +4916,9 @@
         loadState();
         ui.backupDue = isBackupDue();
         render();
-        runDailyBackup();
+        // Deferred one macrotask: buildBackupPayload() reads window.LWT.notes,
+        // which is only defined once AppShell (the 4th script block) runs after this one.
+        setTimeout(runDailyBackup, 0);
       }
 
       window.LWT = window.LWT || {};
@@ -5001,6 +5064,107 @@
         });
       }
 
+      /* ── Notiz-Widget (Sticky-Bar) ──────────────────────────── */
+      var NOTES_KEY = 'local-work-tracker-v1-notes';
+      var MAX_NOTES = 20000;
+      var notesInput = qs('notesInput');
+      var notesStatus = qs('notesStatus');
+      var notesSaveWarned = false;
+      var notesSaveTimer = null;
+
+      // Unlike sanitizeText() in TimeModule/TaskModule, this keeps \n and \t:
+      // notes are multi-line free text (Markdown-ish), not a single-line field.
+      function sanitizeNotes(value) {
+        return String(value == null ? '' : value)
+          .replace(/\r\n?/g, '\n')
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+          .slice(0, MAX_NOTES);
+      }
+
+      function loadNotes() {
+        var next = { version: 1, text: '', updatedAt: 0 };
+        try {
+          var raw = localStorage.getItem(NOTES_KEY);
+          var parsed = raw ? JSON.parse(raw) : null;
+          if (typeof parsed === 'string') {
+            next.text = sanitizeNotes(parsed);
+          } else if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.text === 'string') next.text = sanitizeNotes(parsed.text);
+            var ts = Number(parsed.updatedAt);
+            if (Number.isFinite(ts) && ts > 0) next.updatedAt = ts;
+          }
+        } catch (err) { console.warn('notes parse failed', err); }
+        return next;
+      }
+
+      function saveNotes() {
+        try {
+          localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+          return true;
+        } catch (err) {
+          console.warn('notes save failed', err);
+          if (!notesSaveWarned) {
+            notesSaveWarned = true;
+            showToast('Notiz konnte nicht gespeichert werden. Ist der Speicher voll?', { variant: 'bad' });
+          }
+          return false;
+        }
+      }
+
+      function setNotesStatus(message, autoClearMs) {
+        if (!notesStatus) return;
+        notesStatus.textContent = message || '';
+        if (autoClearMs) {
+          setTimeout(function () {
+            if (notesStatus.textContent === message) notesStatus.textContent = '';
+          }, autoClearMs);
+        }
+      }
+
+      function flushNotesSave() {
+        if (notesSaveTimer) { clearTimeout(notesSaveTimer); notesSaveTimer = null; }
+        if (!notesInput) return;
+        var next = sanitizeNotes(notesInput.value);
+        if (next === notes.text) { setNotesStatus(''); return; }
+        notes.text = next;
+        notes.updatedAt = Date.now();
+        if (saveNotes()) setNotesStatus('Gespeichert', 1500);
+      }
+
+      function scheduleNotesSave() {
+        setNotesStatus('Ungespeichert …');
+        if (notesSaveTimer) clearTimeout(notesSaveTimer);
+        notesSaveTimer = setTimeout(flushNotesSave, 400);
+      }
+
+      var notes = loadNotes();
+      if (notesInput) {
+        notesInput.value = notes.text;
+        notesInput.addEventListener('input', scheduleNotesSave);
+        notesInput.addEventListener('blur', flushNotesSave);
+      }
+      window.addEventListener('beforeunload', flushNotesSave);
+
+      window.LWT.notes = {
+        getExportPayload: function () { return { text: notes.text, updatedAt: notes.updatedAt }; },
+        importPayload: function (parsed) {
+          if (!parsed || !parsed.notes || typeof parsed.notes.text !== 'string') return false;
+          notes.text = sanitizeNotes(parsed.notes.text);
+          notes.updatedAt = Number(parsed.notes.updatedAt) || Date.now();
+          saveNotes();
+          if (notesInput) notesInput.value = notes.text;
+          setNotesStatus('');
+          return true;
+        },
+        clearAllData: function () {
+          notes.text = '';
+          notes.updatedAt = Date.now();
+          saveNotes();
+          if (notesInput) notesInput.value = '';
+          setNotesStatus('');
+        }
+      };
+
       /* ── Daten tab wiring ───────────────────────────────────── */
       var lastBackupInfo = qs('lastBackupInfo');
       var backupIntervalSelect = qs('backupIntervalSelect');
@@ -5075,11 +5239,12 @@
             }
             var hasTasks = Array.isArray(parsed && parsed.tasks);
             var hasTime = !!(parsed && (Array.isArray(parsed.timeEntries) || Array.isArray(parsed.entries)));
-            if (!hasTasks && !hasTime) {
-              showToast('Import fehlgeschlagen. Die Datei enthält weder Aufgaben noch Zeiteinträge.', { variant: 'bad' });
+            var hasNotes = !!(parsed && parsed.notes && typeof parsed.notes.text === 'string');
+            if (!hasTasks && !hasTime && !hasNotes) {
+              showToast('Import fehlgeschlagen. Die Datei enthält weder Aufgaben noch Zeiteinträge noch Notizen.', { variant: 'bad' });
               return;
             }
-            var ok = window.confirm('Vorhandene Aufgaben und Zeiteinträge werden durch den Inhalt dieser Datei ersetzt. Fortfahren?');
+            var ok = window.confirm('Vorhandene Aufgaben, Zeiteinträge und Notizen werden durch den Inhalt dieser Datei ersetzt. Fortfahren?');
             if (!ok) return;
             Promise.resolve()
               .then(function () { return hasTasks && window.LWT.tasks ? window.LWT.tasks.importPayload(parsed) : 0; })
@@ -5088,7 +5253,10 @@
                   .then(function (timeCount) { return [taskCount, timeCount]; });
               })
               .then(function (counts) {
-                showToast(counts[0] + ' Aufgaben und ' + counts[1] + ' Zeiteinträge importiert.', { variant: 'good' });
+                var notesImported = hasNotes && window.LWT.notes ? window.LWT.notes.importPayload(parsed) : false;
+                var message = counts[0] + ' Aufgaben und ' + counts[1] + ' Zeiteinträge importiert.';
+                if (notesImported) message += ' Notiz ersetzt.';
+                showToast(message, { variant: 'good' });
                 refreshBackupInfo();
               });
           });
@@ -5098,10 +5266,11 @@
       var clearAllBtn = qs('clearAllBtn');
       if (clearAllBtn) {
         clearAllBtn.addEventListener('click', function () {
-          var ok = window.confirm('Wirklich ALLE Aufgaben und Zeiteinträge unwiderruflich löschen?');
+          var ok = window.confirm('Wirklich ALLE Aufgaben, Zeiteinträge und Notizen unwiderruflich löschen?');
           if (!ok) return;
           if (window.LWT.tasks) window.LWT.tasks.clearAllData();
           if (window.LWT.time) window.LWT.time.clearAllData();
+          if (window.LWT.notes) window.LWT.notes.clearAllData();
           showToast('Alle Daten gelöscht.', { variant: 'warn' });
           refreshBackupInfo();
         });

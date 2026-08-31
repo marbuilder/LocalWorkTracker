@@ -8,6 +8,7 @@ Es gibt ein führendes Ticket-System im Unternehmen. Was darin fehlt, ist eine p
 
 - **Nach unten**: alles, was während der Arbeit auffällt, wird im Posteingang erfasst statt sofort bearbeitet — außer es dauert ≤ 15 Minuten, dann lieber direkt erledigen als planen.
 - **Nach oben**: alles, was größer als ein halber Tag ist, gehört als Story ins Unternehmenssystem. Die App bietet die Eskalation explizit an und verweigert das Planen darüber hinaus.
+- **Rahmen unklar**: Aufgaben, deren Umfang noch nicht abschätzbar ist, werden nicht in eine Woche geplant — der Aufwand-Tag „Rahmen unklar" (`tbd`) schickt sie stattdessen ins Backlog, bis der Rahmen (und damit ein echter Aufwand) feststeht.
 - **Zeit ist nicht Pflicht**: die App zwingt nicht dazu, jede Aufgabe zu tracken. Zeiterfassung bleibt ein eigener Tab mit eigenem Ticket-Feld — die Verknüpfung zu einer Aufgabe ist optional und passiert entweder explizit (▶-Button) oder automatisch beim Tippen einer passenden Ticket-Nr.
 
 ## Verknüpfungskonzept
@@ -28,5 +29,6 @@ Unverändert gegenüber LocalTasks: `inbox → (backlog | planned) → (done | d
 - **Zero-Tolerance / 80-80 / Nice-to-have** — Prioritätsstufen.
 - **Quick Win** — Aufwand ≤ 15 Minuten, Guardrail drängt zum Sofort-erledigen.
 - **Story** — Eskalationsziel im Unternehmenssystem für Aufgaben > ½ Tag.
+- **Rahmen unklar (TBD)** — Aufwand-Tag für Aufgaben ohne abschätzbaren Umfang; Guardrail schickt sie ins Backlog statt in eine Woche.
 - **Heute-Fokus** — Teilmenge der für die aktuelle Woche geplanten Aufgaben, die man sich für den aktuellen Tag markiert hat (`todayFlag`).
 - **Live-Timer** — der laufende Zeiteintrag, sticky oben in der App sichtbar, unabhängig vom aktiven Tab.

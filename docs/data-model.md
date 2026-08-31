@@ -11,6 +11,7 @@ Vollständige Feldreferenz und die `window.LWT`-Schnittstelle stehen in [`CLAUDE
 | `local-work-tracker-v1-time-entries` | Zeit | Zeiteinträge + laufender Timer |
 | `local-work-tracker-v1-time-entries-ticket-suggestions` | Zeit | Autocomplete-Presets |
 | `local-work-tracker-v1-time-entries-pomodoro` | Zeit | Pomodoro-Zustand |
+| `local-work-tracker-v1-notes` | App-Shell | Notiz-Widget der Sticky-Bar — `{ version, text, updatedAt }`, reines Markdown ohne Rendering, max. 20.000 Zeichen |
 | `local-work-tracker-v1-theme` | App-Shell | `'light'` \| `'dark'` |
 
 ## Status-Übergänge (Aufgaben)
@@ -19,11 +20,14 @@ Vollständige Feldreferenz und die `window.LWT`-Schnittstelle stehen in [`CLAUDE
 inbox ──(Priorität + Aufwand setzen)──▶ [Guardrail]
   ├─ Aufwand "quick"     → Sofort erledigt (done)  ODER  trotzdem planen
   ├─ Aufwand "toolarge"  → escalated (Story-Key) ODER verworfen (dropped)
+  ├─ Aufwand "tbd"       → backlog (kein Planen möglich, bis Rahmen klar ist)
   └─ sonst               → planned (Kalenderwoche) ODER backlog
 
 planned ──▶ done | dropped | verschoben (carryCount++) | zurück ins backlog
 backlog ──▶ planned | dropped
 ```
+
+Eine geplante Aufgabe, die nachträglich auf Aufwand `toolarge` oder `tbd` umklassifiziert wird (`changeEffort`), fällt automatisch zurück ins Backlog — beide Guardrails gelten rückwirkend, siehe `docs/architecture.md`'s Feature→Funktion-Tabelle.
 
 `done`, `dropped`, `escalated` sind terminal und landen im Archiv, gruppiert nach Kalenderwoche.
 

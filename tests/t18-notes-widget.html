@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T18 notes widget</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T18 Notiz-Widget (Sticky-Bar)</h1>
+  <p>Exercises the plain-text notes scratchpad added to the sticky bar: the newline-preserving <code>sanitizeNotes</code> (deliberately distinct from the modules' <code>sanitizeText</code>, which strips <code>\n</code>/<code>\t</code>) and the defensive <code>loadNotes</code> normalization used for storage/import.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      'use strict';
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      const NOTES_KEY = 'local-work-tracker-v1-notes-test';
+      const MAX_NOTES = 20000;
+
+      // Mirrors sanitizeNotes() in index.html's AppShell script block.
+      function sanitizeNotes(value) {
+        return String(value == null ? '' : value)
+          .replace(/\r\n?/g, '\n')
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+          .slice(0, MAX_NOTES);
+      }
+
+      // Mirrors loadNotes() in index.html's AppShell script block, parameterized
+      // over a raw stored string instead of localStorage so each case is isolated.
+      function parseNotes(raw) {
+        const next = { version: 1, text: '', updatedAt: 0 };
+        try {
+          const parsed = raw ? JSON.parse(raw) : null;
+          if (typeof parsed === 'string') {
+            next.text = sanitizeNotes(parsed);
+          } else if (parsed && typeof parsed === 'object') {
+            if (typeof parsed.text === 'string') next.text = sanitizeNotes(parsed.text);
+            const ts = Number(parsed.updatedAt);
+            if (Number.isFinite(ts) && ts > 0) next.updatedAt = ts;
+          }
+        } catch (err) { /* fall through to defaults, mirrors production */ }
+        return next;
+      }
+
+      // ── sanitizeNotes: newline/tab preservation ──────────────────────────
+      assert(
+        'sanitizeNotes keeps \\n and \\t untouched',
+        sanitizeNotes('Zeile 1\nZeile 2\tEingerückt') === 'Zeile 1\nZeile 2\tEingerückt',
+        sanitizeNotes('Zeile 1\nZeile 2\tEingerückt')
+      );
+
+      const controlChar = String.fromCharCode(7); // BEL — inside the stripped range, distinct from \n/\t
+      assert(
+        'sanitizeNotes strips other control chars (e.g. BEL) to a space',
+        sanitizeNotes('a' + controlChar + 'b') === 'a b',
+        sanitizeNotes('a' + controlChar + 'b')
+      );
+
+      assert(
+        'sanitizeNotes normalizes \\r\\n and lone \\r to \\n',
+        sanitizeNotes('a\r\nb\rc') === 'a\nb\nc',
+        sanitizeNotes('a\r\nb\rc')
+      );
+
+      assert(
+        'sanitizeNotes truncates at MAX_NOTES',
+        sanitizeNotes('x'.repeat(MAX_NOTES + 500)).length === MAX_NOTES
+      );
+
+      assert(
+        'sanitizeNotes handles null/undefined without throwing',
+        sanitizeNotes(null) === '' && sanitizeNotes(undefined) === ''
+      );
+
+      // ── loadNotes-equivalent: defensive parsing ──────────────────────────
+      const brokenJson = parseNotes('{oops');
+      assert(
+        'parseNotes on invalid JSON falls back to empty text, no throw',
+        brokenJson.text === '' && brokenJson.updatedAt === 0,
+        brokenJson
+      );
+
+      const wrongShape = parseNotes('[]');
+      assert(
+        'parseNotes on a non-object JSON value falls back to empty text',
+        wrongShape.text === '' && wrongShape.updatedAt === 0,
+        wrongShape
+      );
+
+      const badField = parseNotes('{"text":42,"updatedAt":"nope"}');
+      assert(
+        'parseNotes drops a non-string text field and a non-numeric updatedAt',
+        badField.text === '' && badField.updatedAt === 0,
+        badField
+      );
+
+      const legacyString = parseNotes(JSON.stringify('Alte Notiz\nmehrzeilig'));
+      assert(
+        'parseNotes accepts a bare JSON string (hand-edited/legacy shape)',
+        legacyString.text === 'Alte Notiz\nmehrzeilig',
+        legacyString
+      );
+
+      const valid = parseNotes(JSON.stringify({ version: 1, text: 'Hallo\nWelt', updatedAt: 1700000000000 }));
+      assert(
+        'parseNotes reads a well-formed payload back unchanged',
+        valid.text === 'Hallo\nWelt' && valid.updatedAt === 1700000000000,
+        valid
+      );
+
+      const emptyStore = parseNotes(null);
+      assert(
+        'parseNotes on an absent key returns the empty default',
+        emptyStore.text === '' && emptyStore.updatedAt === 0,
+        emptyStore
+      );
+
+      // ── round-trip through real localStorage, sanity check ───────────────
+      try {
+        localStorage.removeItem(NOTES_KEY);
+        const written = { version: 1, text: sanitizeNotes('Testnotiz\nZeile 2'), updatedAt: Date.now() };
+        localStorage.setItem(NOTES_KEY, JSON.stringify(written));
+        const readBack = parseNotes(localStorage.getItem(NOTES_KEY));
+        assert(
+          'round-trip through localStorage preserves multi-line text',
+          readBack.text === 'Testnotiz\nZeile 2',
+          readBack
+        );
+        localStorage.removeItem(NOTES_KEY);
+      } catch (err) {
+        assert('round-trip through localStorage preserves multi-line text', false, String(err));
+      }
+
+      // ── render ─────────────────────────────────────────────────────────
+      const tbody = document.getElementById('results');
+      let passCount = 0;
+      results.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = r.name;
+        const tdResult = document.createElement('td');
+        tdResult.textContent = r.pass ? 'PASS' : 'FAIL';
+        tdResult.className = r.pass ? 'pass' : 'fail';
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = r.details;
+        tr.append(tdName, tdResult, tdDetails);
+        tbody.appendChild(tr);
+        if (r.pass) passCount++;
+      });
+      document.getElementById('status').textContent =
+        `${passCount}/${results.length} checks passed.`;
+    })();
+  </script>
+</body>
+</html>
