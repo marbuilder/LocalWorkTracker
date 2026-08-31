@@ -3547,8 +3547,11 @@
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
 
-        // Repair invariants: an assessed status requires both priority and effort.
-        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        // Repair invariants: backlog/planned are the assessed working statuses
+        // and require both priority and effort. Terminal statuses are
+        // deliberately reachable straight from the inbox without triage (drop,
+        // "sofort erledigt", escalate), so they must survive a reload as-is.
+        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
         // A planned task without a parseable week falls back to the backlog.
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;

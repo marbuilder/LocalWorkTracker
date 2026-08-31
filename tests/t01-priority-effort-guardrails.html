@@ -64,7 +64,7 @@
         const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
-        if (status !== 'inbox' && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
         const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
