@@ -89,9 +89,20 @@
         doc.getElementById('addManualBtn').click();
       }
 
-      function summaryRows(doc) {
+      // groupBy=ticket columns are Ticket|Beschreibung|Gesamtzeit|Einträge (the ticket cell's
+      // first td also holds a copy-to-clipboard button, so its label is read from the
+      // dedicated .ticket-cell span rather than the td's full textContent); groupBy=day keeps
+      // the older Gruppe|Gesamtzeit|Einträge|Tickets layout.
+      function summaryRows(doc, byTicket) {
         return Array.from(doc.querySelectorAll('#summaryContainer table tbody tr')).map(tr => {
           const tds = tr.querySelectorAll('td');
+          if (byTicket) {
+            return {
+              group: tds[0]?.querySelector('.ticket-cell span')?.textContent?.trim() ?? tds[0]?.textContent?.trim(),
+              total: tds[2]?.textContent?.trim(),
+              count: tds[3]?.textContent?.trim()
+            };
+          }
           return {
             group: tds[0]?.textContent?.trim(),
             total: tds[1]?.textContent?.trim(),
@@ -124,7 +135,7 @@
         // Default: groupBy = 'ticket'
         dispatchInput(groupBy, 'ticket');
         await waitRaf(3);
-        let rows = summaryRows(doc);
+        let rows = summaryRows(doc, true);
         record(
           'groupBy=Ticket → 2 Zeilen (T-X, T-Y)',
           rows.length === 2 && rows.some(r => r.group === 'T-X') && rows.some(r => r.group === 'T-Y'),
@@ -146,7 +157,7 @@
         // Switch to groupBy = day
         dispatchInput(groupBy, 'day');
         await waitRaf(3);
-        rows = summaryRows(doc);
+        rows = summaryRows(doc, false);
         record(
           'groupBy=Tag → 2 Zeilen (heute, gestern)',
           rows.length === 2,

@@ -98,6 +98,8 @@
     }
     .field { grid-column: span 12; }
     .field.s3 { grid-column: span 3; }
+    .field.s4 { grid-column: span 4; }
+    .field.s5 { grid-column: span 5; }
     .field.s6 { grid-column: span 6; }
     .field.s12 { grid-column: span 12; }
     label {
@@ -204,6 +206,9 @@
       display: grid; gap: 8px;
       grid-template-columns: minmax(0, 1fr) minmax(0, 200px);
       align-items: stretch;
+    }
+    .ticket-row.ticket-row-split {
+      grid-template-columns: minmax(0, 150px) minmax(0, 1fr) minmax(0, 190px);
     }
     .ticket-row select { font-size: 14px; }
     .ticket-help { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.35; }
@@ -349,6 +354,16 @@
     .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .actions button { width: auto; min-height: 34px; padding: 6px 10px; font-size: 13px; }
     .summary-table td:first-child, .summary-table th:first-child { width: 18%; }
+    .ticket-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .copy-btn {
+      width: 24px; height: 24px; min-height: 0; padding: 0; margin-left: 2px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid transparent; color: var(--muted);
+      border-radius: 6px; font-size: 13px; line-height: 1; flex-shrink: 0;
+      vertical-align: middle;
+    }
+    .copy-btn:hover { color: var(--accent); background: var(--row-hover); border-color: var(--border); }
+    .summary-desc-more { margin-left: 4px; }
     dialog {
       width: min(780px, calc(100vw - 24px)); border: 1px solid var(--border);
       border-radius: 14px; background: var(--dialog-bg); color: var(--text); padding: 0;
@@ -474,11 +489,11 @@
     }
     @media (max-width: 700px) {
       .row { grid-template-columns: 1fr; }
-      .field, .field.s3, .field.s6, .field.s12 { grid-column: span 1; }
+      .field, .field.s3, .field.s4, .field.s5, .field.s6, .field.s12 { grid-column: span 1; }
       .stats { grid-template-columns: 1fr; }
       .day-nav { grid-template-columns: 1fr; }
       .current-row { grid-template-columns: 1fr; }
-      .ticket-row { grid-template-columns: 1fr; }
+      .ticket-row, .ticket-row.ticket-row-split { grid-template-columns: 1fr; }
       table, thead, tbody, th, td, tr { display: block; }
       thead { display: none; }
       tr { border-bottom: 1px solid var(--border); }
@@ -932,8 +947,9 @@
       <div class="current-side current-side-main">
         <div id="currentTimer" class="current current-compact" aria-live="polite">
           <div id="currentTimerStatus" class="current-status"></div>
-          <div class="ticket-row current-ticket-row">
+          <div class="ticket-row current-ticket-row ticket-row-split">
             <input id="ticketNumber" class="ticket-input-compact" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+            <input id="ticketDescription" class="ticket-input-compact" maxlength="120" placeholder="Beschreibung (optional)" autocomplete="off" enterkeyhint="done" aria-label="Beschreibung">
             <select id="ticketNumberPreset" class="ticket-preset-compact" aria-label="Gespeichertes Ticket auswählen">
               <option value="">Vorauswahl…</option>
             </select>
@@ -1020,8 +1036,9 @@
         <div class="row">
           <div class="field s12">
             <label for="manualTicket">Ticket-Nr. *</label>
-            <div class="ticket-row">
+            <div class="ticket-row ticket-row-split">
               <input id="manualTicket" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+              <input id="manualTicketDescription" maxlength="120" placeholder="Beschreibung (optional)" autocomplete="off" enterkeyhint="done" aria-label="Beschreibung">
               <select id="manualTicketPreset" aria-label="Gespeichertes Ticket auswählen">
                 <option value="">Vorauswahl…</option>
               </select>
@@ -1188,11 +1205,15 @@
           <div class="compact-inner">
             <p class="compact-hint">Tickets, die per Autocomplete in den Eingabefeldern vorgeschlagen werden. Tickets aus gespeicherten Einträgen werden automatisch ergänzt.</p>
             <div class="row">
-              <div class="field s6">
+              <div class="field s4">
                 <label for="presetTicketInput">Neues Preset-Ticket</label>
                 <input id="presetTicketInput" maxlength="60" placeholder="Ticket-Nr." autocomplete="off" enterkeyhint="done">
               </div>
-              <div class="field s6">
+              <div class="field s5">
+                <label for="presetDescriptionInput">Beschreibung</label>
+                <input id="presetDescriptionInput" maxlength="120" placeholder="Beschreibung (optional)" autocomplete="off" enterkeyhint="done">
+              </div>
+              <div class="field s3">
                 <label>&nbsp;</label>
                 <button id="addPresetTicketBtn" type="button" class="primary">Hinzufügen</button>
               </div>
@@ -1257,8 +1278,9 @@
       <div class="row">
         <div class="field s12">
           <label for="editTicket">Ticket-Nr. *</label>
-            <div class="ticket-row">
+            <div class="ticket-row ticket-row-split">
               <input id="editTicket" maxlength="60" placeholder="Ticket-Nr. eingeben" autocomplete="off" enterkeyhint="done" list="ticketSuggestions">
+              <input id="editTicketDescription" maxlength="120" placeholder="Beschreibung (optional)" autocomplete="off" enterkeyhint="done" aria-label="Beschreibung">
               <select id="editTicketPreset" aria-label="Gespeichertes Ticket auswählen">
                 <option value="">Vorauswahl…</option>
               </select>
@@ -1301,6 +1323,8 @@
       const SNAPSHOT_PREFIX = STORAGE_KEY + '-snapshot-';
       const MAX_MANUAL_SNAPSHOTS = 5;
       const TICKET_PRESETS = [];
+      const MAX_TICKET = 60;
+      const MAX_TICKET_DESCRIPTION = 120;
       const POMODORO_KEY = STORAGE_KEY + '-pomodoro';
       const POMODORO_DEFAULT_MINUTES = 25;
       const POMODORO_ALLOWED_MINUTES = [5, 15, 25, 30, 45, 60];
@@ -1344,8 +1368,9 @@
       window.LWT = window.LWT || {};
       window.LWT.time = {
         getActiveTimer: () => state.activeTimer,
-        startTimerFromTask: function (taskId, ticketLabel, notes) {
-          dom.ticketNumber.value = sanitizeText(ticketLabel || '', 60);
+        startTimerFromTask: function (taskId, ticketLabel, ticketDescription, notes) {
+          dom.ticketNumber.value = sanitizeText(ticketLabel || '', MAX_TICKET);
+          dom.ticketDescription.value = sanitizeText(ticketDescription || '', MAX_TICKET_DESCRIPTION);
           dom.taskNotes.value = sanitizeText(notes || '', 2000);
           dom.timerStartTime.value = '';
           return startTimer(taskId);
@@ -1588,8 +1613,7 @@
         state.entries = Array.isArray(snap.payload.entries) ? snap.payload.entries.filter(isValidEntry).map(normalizeEntry) : [];
         state.activeTimer = (snap.payload.activeTimer && isValidActiveTimer(snap.payload.activeTimer)) ? normalizeActiveTimer(snap.payload.activeTimer) : null;
         if (Array.isArray(snap.payload.customTickets)) {
-          customTickets = [...new Set(snap.payload.customTickets.map(t => sanitizeText(t, 60)).filter(Boolean))]
-            .sort((a, b) => a.localeCompare(b, 'de'));
+          customTickets = dedupeTicketPairs(snap.payload.customTickets.map(normalizeTicketPair).filter(pair => pair.ticket));
           saveCustomTickets();
         }
         saveState();
@@ -1688,6 +1712,44 @@
         return dismiss;
       }
 
+      async function copyToClipboard(text) {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+          }
+        } catch {}
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.focus();
+          textarea.select();
+          const ok = document.execCommand('copy');
+          textarea.remove();
+          return ok;
+        } catch {
+          return false;
+        }
+      }
+
+      function ticketCopyButton(ticket) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'copy-btn';
+        btn.textContent = '⧉';
+        btn.title = 'Ticketnummer kopieren';
+        btn.setAttribute('aria-label', `Ticketnummer ${ticket} kopieren`);
+        btn.addEventListener('click', async () => {
+          const ok = await copyToClipboard(ticket);
+          if (ok) showToast(`Ticketnummer kopiert: ${ticket}`, { variant: 'good' });
+          else showToast('Kopieren fehlgeschlagen.', { variant: 'bad' });
+        });
+        return btn;
+      }
+
       function askConfirm(opts) {
         const {
           title = 'Bestätigung',
@@ -1773,15 +1835,15 @@
 
       function bindElements() {
         [
-          'ticketNumber','ticketNumberPreset','timerStartTime','taskNotes','startBtn','stopBtn','resetFormBtn',
-          'manualTicket','manualTicketPreset','manualDate','manualStart','manualEnd','manualPause','manualNotes','addManualBtn',
+          'ticketNumber','ticketDescription','ticketNumberPreset','timerStartTime','taskNotes','startBtn','stopBtn','resetFormBtn',
+          'manualTicket','manualTicketDescription','manualTicketPreset','manualDate','manualStart','manualEnd','manualPause','manualNotes','addManualBtn',
           'filterFrom','filterTo','filterTicket','groupBy','clearFiltersBtn','ticketSuggestions',
           'prevDayBtn','todayBtn','nextDayBtn','dayFocus','applyDayBtn',
-          'presetTicketInput','addPresetTicketBtn','presetListContainer','exportTicketsBtn','importTicketsBtn','importTicketsFile',
+          'presetTicketInput','presetDescriptionInput','addPresetTicketBtn','presetListContainer','exportTicketsBtn','importTicketsBtn','importTicketsFile',
           'createSnapshotBtn','snapshotListContainer',
           'pomodoroBar','pomodoroPill','pomodoroDisplay','pomodoroSubtitle','pomodoroDuration','pomodoroStartBtn','pomodoroStopBtn',
           'currentTimer','currentTimerStatus','stats','summaryContainer','entriesContainer','summaryChart','chartSubtitle','chartTooltip',
-          'editId','editTicket','editTicketPreset','editDate','editStart','editEnd','editPause','editNotes','cancelEditBtn','saveEditBtn',
+          'editId','editTicket','editTicketDescription','editTicketPreset','editDate','editStart','editEnd','editPause','editNotes','cancelEditBtn','saveEditBtn',
           'confirmDialogTitle','confirmDialogMessage','confirmDialogActions','toastRoot'
         ].forEach(id => dom[id] = qs(id));
         dom.editDialog = document.getElementById('timeEditDialog');
@@ -1812,14 +1874,28 @@
         try {
           const parsedTickets = rawTickets ? JSON.parse(rawTickets) : [];
           if (Array.isArray(parsedTickets)) {
-            normalized.customTickets = parsedTickets.map(ticket => sanitizeText(ticket, 60)).filter(Boolean);
+            normalized.customTickets = parsedTickets.map(normalizeTicketPair).filter(pair => pair.ticket);
           }
         } catch (err) {
           console.warn('Persisted ticket suggestions could not be parsed; resetting to defaults.', err);
         }
 
-        normalized.customTickets = [...new Set(normalized.customTickets)].sort((a, b) => a.localeCompare(b, 'de'));
+        normalized.customTickets = dedupeTicketPairs(normalized.customTickets);
         return normalized;
+      }
+
+      // De-dupes ticket pairs by ticket number (case-sensitive, matching how tickets are
+      // stored elsewhere); a later, non-empty description wins over an earlier empty one.
+      function dedupeTicketPairs(pairs) {
+        const byTicket = new Map();
+        pairs.forEach(pair => {
+          if (!pair.ticket) return;
+          const existing = byTicket.get(pair.ticket);
+          if (!existing || (pair.description && !existing.description)) {
+            byTicket.set(pair.ticket, pair);
+          }
+        });
+        return [...byTicket.values()].sort((a, b) => a.ticket.localeCompare(b.ticket, 'de'));
       }
 
       function loadCustomTickets() {
@@ -1831,8 +1907,11 @@
       }
 
       function getAllTickets() {
-        return [...new Set([...TICKET_PRESETS, ...customTickets].map(ticket => sanitizeText(ticket, 60)).filter(Boolean))]
-          .sort((a, b) => a.localeCompare(b, 'de'));
+        return dedupeTicketPairs([...TICKET_PRESETS, ...customTickets].map(normalizeTicketPair).filter(pair => pair.ticket));
+      }
+
+      function ticketOptionLabel(pair) {
+        return pair.description ? `${pair.ticket}: ${pair.description}` : pair.ticket;
       }
 
       function populateTicketPresets() {
@@ -1845,13 +1924,14 @@
           emptyOpt.value = '';
           emptyOpt.textContent = 'Vorauswahl…';
           select.appendChild(emptyOpt);
-          tickets.forEach(ticket => {
+          tickets.forEach(pair => {
             const opt = document.createElement('option');
-            opt.value = ticket;
-            opt.textContent = ticket;
+            opt.value = pair.ticket;
+            opt.textContent = ticketOptionLabel(pair);
+            opt.dataset.description = pair.description;
             select.appendChild(opt);
           });
-          if (current && tickets.includes(current)) select.value = current;
+          if (current && tickets.some(pair => pair.ticket === current)) select.value = current;
         });
         renderPresetList();
       }
@@ -1859,19 +1939,32 @@
       function populateTicketSuggestions() {
         const tickets = getAllTickets();
         dom.ticketSuggestions.innerHTML = '';
-        tickets.forEach(ticket => {
+        tickets.forEach(pair => {
           const option = document.createElement('option');
-          option.value = ticket;
+          option.value = pair.ticket;
+          option.label = ticketOptionLabel(pair);
           dom.ticketSuggestions.appendChild(option);
         });
       }
 
-      function rememberTicket(ticket) {
-        const clean = sanitizeText(ticket, 60);
-        if (!clean) return;
-        if (TICKET_PRESETS.includes(clean) || customTickets.includes(clean)) return;
-        customTickets.push(clean);
-        customTickets.sort((a, b) => a.localeCompare(b, 'de'));
+      // Creates a new remembered ticket, or — if it already exists and a non-empty
+      // description is given — updates its description.
+      function rememberTicket(ticket, description) {
+        const cleanTicket = sanitizeText(ticket, MAX_TICKET);
+        if (!cleanTicket) return;
+        const cleanDescription = sanitizeText(description || '', MAX_TICKET_DESCRIPTION);
+        const existing = customTickets.find(pair => pair.ticket === cleanTicket);
+        if (existing) {
+          if (cleanDescription && existing.description !== cleanDescription) {
+            existing.description = cleanDescription;
+          } else {
+            return;
+          }
+        } else {
+          if (TICKET_PRESETS.some(p => normalizeTicketPair(p).ticket === cleanTicket)) return;
+          customTickets.push({ ticket: cleanTicket, description: cleanDescription });
+        }
+        customTickets = dedupeTicketPairs(customTickets);
         saveCustomTickets();
         populateTicketPresets();
         populateTicketSuggestions();
@@ -1880,14 +1973,20 @@
       function rememberTicketsFromEntries(entries) {
         let changed = false;
         entries.forEach(entry => {
-          const clean = sanitizeText(entry.ticket, 60);
-          if (!clean) return;
-          if (TICKET_PRESETS.includes(clean) || customTickets.includes(clean)) return;
-          customTickets.push(clean);
+          const cleanTicket = sanitizeText(entry.ticket, MAX_TICKET);
+          if (!cleanTicket) return;
+          if (TICKET_PRESETS.some(p => normalizeTicketPair(p).ticket === cleanTicket)) return;
+          const cleanDescription = sanitizeText(entry.ticketDescription || '', MAX_TICKET_DESCRIPTION);
+          const existing = customTickets.find(pair => pair.ticket === cleanTicket);
+          if (existing) {
+            if (cleanDescription && !existing.description) { existing.description = cleanDescription; changed = true; }
+            return;
+          }
+          customTickets.push({ ticket: cleanTicket, description: cleanDescription });
           changed = true;
         });
         if (changed) {
-          customTickets = [...new Set(customTickets)].sort((a, b) => a.localeCompare(b, 'de'));
+          customTickets = dedupeTicketPairs(customTickets);
           saveCustomTickets();
           populateTicketPresets();
           populateTicketSuggestions();
@@ -1904,13 +2003,14 @@
           dom.presetListContainer.appendChild(hint);
           return;
         }
-        customTickets.forEach(ticket => {
+        customTickets.forEach(pair => {
+          const ticket = pair.ticket;
           const chip = document.createElement('div');
           chip.className = 'preset-item';
           const label = document.createElement('span');
           label.className = 'preset-label';
-          label.textContent = ticket;
-          label.title = ticket;
+          label.textContent = ticketOptionLabel(pair);
+          label.title = ticketOptionLabel(pair);
           const removeBtn = document.createElement('button');
           removeBtn.type = 'button';
           removeBtn.textContent = 'Entfernen';
@@ -1923,18 +2023,19 @@
         });
       }
 
-      function addPresetTicket(rawValue) {
-        const clean = sanitizeText(rawValue, 60);
+      function addPresetTicket(rawTicket, rawDescription) {
+        const clean = sanitizeText(rawTicket, MAX_TICKET);
         if (!clean) {
           setFieldError(dom.presetTicketInput, 'Bitte einen gültigen Ticket-Namen angeben.');
           return false;
         }
-        if (customTickets.includes(clean)) {
+        if (customTickets.some(pair => pair.ticket === clean)) {
           setFieldError(dom.presetTicketInput, 'Dieses Ticket ist bereits in der Liste.');
           return false;
         }
-        customTickets.push(clean);
-        customTickets.sort((a, b) => a.localeCompare(b, 'de'));
+        const description = sanitizeText(rawDescription || '', MAX_TICKET_DESCRIPTION);
+        customTickets.push({ ticket: clean, description });
+        customTickets = dedupeTicketPairs(customTickets);
         saveCustomTickets();
         populateTicketPresets();
         populateTicketSuggestions();
@@ -1943,7 +2044,7 @@
       }
 
       async function removePresetTicket(ticket) {
-        if (!customTickets.includes(ticket)) return;
+        if (!customTickets.some(pair => pair.ticket === ticket)) return;
         const ok = await askConfirm({
           title: 'Ticket entfernen',
           message: `Ticket „${ticket}" aus der Vorauswahl entfernen?`,
@@ -1951,7 +2052,7 @@
           confirmVariant: 'bad'
         });
         if (!ok) return;
-        customTickets = customTickets.filter(t => t !== ticket);
+        customTickets = customTickets.filter(pair => pair.ticket !== ticket);
         saveCustomTickets();
         populateTicketPresets();
         populateTicketSuggestions();
@@ -1961,7 +2062,7 @@
       function exportTickets() {
         const data = {
           exportedAt: new Date().toISOString(),
-          version: 1,
+          version: 2,
           app: 'Lokaler Zeit-Tracker',
           tickets: customTickets
         };
@@ -1981,10 +2082,12 @@
             list = parsed.tickets;
           }
           if (!list) throw new Error('Ungültiges Format');
-          const cleaned = list
-            .filter(v => typeof v === 'string')
-            .map(v => sanitizeText(v, 60))
-            .filter(Boolean);
+          const cleaned = dedupeTicketPairs(
+            list
+              .filter(v => typeof v === 'string' || (v && typeof v === 'object'))
+              .map(normalizeTicketPair)
+              .filter(pair => pair.ticket)
+          );
           if (!cleaned.length) {
             showToast('Keine gültigen Tickets in der Datei gefunden.', { variant: 'bad' });
             return;
@@ -1999,10 +2102,7 @@
           });
           if (mode === null) return;
           if (mode === 'replace') customTickets = [];
-          cleaned.forEach(t => {
-            if (!customTickets.includes(t)) customTickets.push(t);
-          });
-          customTickets = [...new Set(customTickets)].sort((a, b) => a.localeCompare(b, 'de'));
+          customTickets = dedupeTicketPairs([...customTickets, ...cleaned]);
           saveCustomTickets();
           populateTicketPresets();
           populateTicketSuggestions();
@@ -2027,6 +2127,7 @@
         dom.stopBtn.addEventListener('click', stopTimer);
         dom.resetFormBtn.addEventListener('click', () => {
           dom.ticketNumber.value = '';
+          dom.ticketDescription.value = '';
           dom.ticketNumberPreset.value = '';
           dom.taskNotes.value = '';
           dom.timerStartTime.value = '';
@@ -2041,20 +2142,40 @@
           renderPomodoro();
         });
 
-        function applyPresetSelect(selectEl, inputEl) {
-          const value = sanitizeText(selectEl.value, 60);
+        function applyPresetSelect(selectEl, inputEl, descriptionEl) {
+          const value = sanitizeText(selectEl.value, MAX_TICKET);
           if (!value) return;
           inputEl.value = value;
           clearFieldError(inputEl);
+          if (descriptionEl) {
+            const opt = selectEl.selectedOptions && selectEl.selectedOptions[0];
+            descriptionEl.value = sanitizeText((opt && opt.dataset.description) || '', MAX_TICKET_DESCRIPTION);
+          }
           inputEl.focus();
           if (typeof inputEl.setSelectionRange === 'function') {
             inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
           }
           selectEl.value = '';
         }
-        dom.ticketNumberPreset.addEventListener('change', () => applyPresetSelect(dom.ticketNumberPreset, dom.ticketNumber));
-        dom.manualTicketPreset.addEventListener('change', () => applyPresetSelect(dom.manualTicketPreset, dom.manualTicket));
-        if (dom.editTicketPreset) dom.editTicketPreset.addEventListener('change', () => applyPresetSelect(dom.editTicketPreset, dom.editTicket));
+        dom.ticketNumberPreset.addEventListener('change', () => applyPresetSelect(dom.ticketNumberPreset, dom.ticketNumber, dom.ticketDescription));
+        dom.manualTicketPreset.addEventListener('change', () => applyPresetSelect(dom.manualTicketPreset, dom.manualTicket, dom.manualTicketDescription));
+        if (dom.editTicketPreset) dom.editTicketPreset.addEventListener('change', () => applyPresetSelect(dom.editTicketPreset, dom.editTicket, dom.editTicketDescription));
+
+        // If a typed ticket number matches a remembered ticket and the description field is
+        // still empty, auto-fill the description — but never overwrite a manual entry.
+        function attachTicketAutofill(numberEl, descriptionEl) {
+          if (!numberEl || !descriptionEl) return;
+          numberEl.addEventListener('input', () => {
+            if (descriptionEl.value) return;
+            const clean = sanitizeText(numberEl.value, MAX_TICKET);
+            if (!clean) return;
+            const match = getAllTickets().find(pair => pair.ticket === clean);
+            if (match && match.description) descriptionEl.value = match.description;
+          });
+        }
+        attachTicketAutofill(dom.ticketNumber, dom.ticketDescription);
+        attachTicketAutofill(dom.manualTicket, dom.manualTicketDescription);
+        attachTicketAutofill(dom.editTicket, dom.editTicketDescription);
 
         dom.addManualBtn.addEventListener('click', addManualEntry);
         [dom.filterFrom, dom.filterTo, dom.filterTicket, dom.groupBy].forEach(el => el.addEventListener('input', renderAll));
@@ -2101,12 +2222,19 @@
           renderAll();
         });
         dom.addPresetTicketBtn.addEventListener('click', () => {
-          if (addPresetTicket(dom.presetTicketInput.value)) {
+          if (addPresetTicket(dom.presetTicketInput.value, dom.presetDescriptionInput.value)) {
             dom.presetTicketInput.value = '';
+            dom.presetDescriptionInput.value = '';
             dom.presetTicketInput.focus();
           }
         });
         dom.presetTicketInput.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            dom.addPresetTicketBtn.click();
+          }
+        });
+        dom.presetDescriptionInput.addEventListener('keydown', (event) => {
           if (event.key === 'Enter') {
             event.preventDefault();
             dom.addPresetTicketBtn.click();
@@ -2344,7 +2472,8 @@
       }
 
       async function startTimer(overrideTaskId) {
-        const ticket = sanitizeText(dom.ticketNumber.value, 60);
+        const ticket = sanitizeText(dom.ticketNumber.value, MAX_TICKET);
+        const ticketDescription = sanitizeText(dom.ticketDescription.value, MAX_TICKET_DESCRIPTION);
         const notes = sanitizeText(dom.taskNotes.value, 2000);
 
         if (!ticket) {
@@ -2365,7 +2494,7 @@
           startTs = requestedStartTs;
         }
 
-        rememberTicket(ticket);
+        rememberTicket(ticket, ticketDescription);
 
         if (state.activeTimer) {
           const replace = await askConfirm({
@@ -2379,7 +2508,7 @@
         }
 
         const taskId = overrideTaskId || resolveTaskIdForTicket(ticket);
-        state.activeTimer = { id: cryptoRandomId(), ticket, notes, startTs, taskId };
+        state.activeTimer = { id: cryptoRandomId(), ticket, ticketDescription, notes, startTs, taskId };
         dom.timerStartTime.value = '';
         saveState();
         renderAll();
@@ -2431,7 +2560,7 @@
           return false;
         }
         state.entries.push({
-          id: active.id, ticket: active.ticket, notes: active.notes,
+          id: active.id, ticket: active.ticket, ticketDescription: active.ticketDescription || '', notes: active.notes,
           startTs: floorToMinute(active.startTs), endTs: ceilToMinute(endTs),
           pauseMinutes: 0, createdAt: Date.now(), source: 'timer', taskId: active.taskId || null
         });
@@ -2457,7 +2586,7 @@
           return true;
         }
         state.entries.push({
-          id: active.id, ticket: active.ticket, notes: active.notes,
+          id: active.id, ticket: active.ticket, ticketDescription: active.ticketDescription || '', notes: active.notes,
           startTs: floorToMinute(active.startTs), endTs: dayEnd, pauseMinutes: 0,
           createdAt: Date.now(), source: 'timer', taskId: active.taskId || null
         });
@@ -2467,7 +2596,8 @@
       }
 
       function addManualEntry() {
-        const ticket = sanitizeText(dom.manualTicket.value, 60);
+        const ticket = sanitizeText(dom.manualTicket.value, MAX_TICKET);
+        const ticketDescription = sanitizeText(dom.manualTicketDescription.value, MAX_TICKET_DESCRIPTION);
         const date = dom.manualDate.value;
         const start = dom.manualStart.value;
         const end = dom.manualEnd.value;
@@ -2481,7 +2611,7 @@
         if (!end)    { setFieldError(dom.manualEnd, 'Pflichtfeld');    firstInvalid = firstInvalid || dom.manualEnd; }
         if (firstInvalid) { firstInvalid.focus(); return; }
 
-        rememberTicket(ticket);
+        rememberTicket(ticket, ticketDescription);
 
         const startTs = localDateTimeToTs(date, start);
         const endTs = localDateTimeToTs(date, end);
@@ -2495,11 +2625,12 @@
         }
 
         state.entries.push({
-          id: cryptoRandomId(), ticket, notes, startTs, endTs, pauseMinutes,
+          id: cryptoRandomId(), ticket, ticketDescription, notes, startTs, endTs, pauseMinutes,
           createdAt: Date.now(), source: 'manual'
         });
         saveState();
         dom.manualTicket.value = '';
+        dom.manualTicketDescription.value = '';
         if (dom.manualTicketPreset) dom.manualTicketPreset.value = '';
         dom.manualStart.value = '';
         dom.manualEnd.value = '';
@@ -2527,7 +2658,8 @@
         const isPending = elapsedMs < 0;
         dom.currentTimerStatus.innerHTML = '';
         const left = document.createElement('div');
-        left.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><div class="pill${isPending ? ' pending' : ''}">${isPending ? '● Geplant' : '● Aktiv'}</div><strong>${escapeHtml(a.ticket || '—')}</strong></div><div class="muted" style="margin-top:4px;">Start: ${formatDateTime(a.startTs)}</div>`;
+        const descriptionHtml = a.ticketDescription ? ` <span class="muted">${escapeHtml(a.ticketDescription)}</span>` : '';
+        left.innerHTML = `<div style="display:flex;align-items:center;gap:8px;"><div class="pill${isPending ? ' pending' : ''}">${isPending ? '● Geplant' : '● Aktiv'}</div><strong>${escapeHtml(a.ticket || '—')}</strong>${descriptionHtml}</div><div class="muted" style="margin-top:4px;">Start: ${formatDateTime(a.startTs)}</div>`;
         const right = document.createElement('div');
         right.innerHTML = `<div class="live-duration">${isPending ? '-' : ''}${formatDuration(Math.abs(elapsedMs))}</div><div class="muted">${isPending ? 'Beginnt in' : 'Live-Laufzeit'}</div>`;
         dom.currentTimerStatus.append(left, right);
@@ -2567,30 +2699,67 @@
         }
 
         const rows = buildSummaryRows(filtered, dom.groupBy.value);
+        const byTicket = dom.groupBy.value === 'ticket';
         const table = document.createElement('table');
         table.className = 'summary-table';
-        table.innerHTML = `
-          <thead>
-            <tr>
-              <th>Gruppe</th>
-              <th>Gesamtzeit</th>
-              <th>Einträge</th>
-              <th>Tickets</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        `;
-        const tbody = table.querySelector('tbody');
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        (byTicket ? ['Ticket', 'Beschreibung', 'Gesamtzeit', 'Einträge'] : ['Gruppe', 'Gesamtzeit', 'Einträge', 'Tickets'])
+          .forEach(label => {
+            const th = document.createElement('th');
+            th.textContent = label;
+            headRow.appendChild(th);
+          });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
         rows.forEach(row => {
           const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td data-label="Gruppe">${escapeHtml(row.key)}</td>
-            <td data-label="Gesamtzeit" class="tnum">${escapeHtml(formatDuration(row.ms))}</td>
-            <td data-label="Einträge">${row.count}</td>
-            <td data-label="Tickets">${row.tickets.size}</td>
-          `;
+          if (byTicket) {
+            const ticketTd = document.createElement('td');
+            ticketTd.setAttribute('data-label', 'Ticket');
+            const ticketCell = document.createElement('div');
+            ticketCell.className = 'ticket-cell';
+            const ticketLabel = document.createElement('span');
+            ticketLabel.textContent = row.key;
+            ticketCell.appendChild(ticketLabel);
+            if (row.key !== 'Ohne Ticket') ticketCell.appendChild(ticketCopyButton(row.key));
+            ticketTd.appendChild(ticketCell);
+            tr.appendChild(ticketTd);
+
+            const descTd = document.createElement('td');
+            descTd.setAttribute('data-label', 'Beschreibung');
+            descTd.textContent = row.description || '—';
+            if (row.descriptionCount > 1) {
+              const more = document.createElement('span');
+              more.className = 'muted summary-desc-more';
+              more.textContent = `+${row.descriptionCount - 1} weitere`;
+              more.title = row.otherDescriptions.join(', ');
+              descTd.appendChild(more);
+            }
+            tr.appendChild(descTd);
+
+            const msTd = document.createElement('td');
+            msTd.setAttribute('data-label', 'Gesamtzeit');
+            msTd.className = 'tnum';
+            msTd.textContent = formatDuration(row.ms);
+            tr.appendChild(msTd);
+
+            const countTd = document.createElement('td');
+            countTd.setAttribute('data-label', 'Einträge');
+            countTd.textContent = String(row.count);
+            tr.appendChild(countTd);
+          } else {
+            tr.innerHTML = `
+              <td data-label="Gruppe">${escapeHtml(row.key)}</td>
+              <td data-label="Gesamtzeit" class="tnum">${escapeHtml(formatDuration(row.ms))}</td>
+              <td data-label="Einträge">${row.count}</td>
+              <td data-label="Tickets">${row.tickets.size}</td>
+            `;
+          }
           tbody.appendChild(tr);
         });
+        table.appendChild(tbody);
         dom.summaryContainer.innerHTML = '';
         dom.summaryContainer.appendChild(table);
         renderChart(rows);
@@ -2611,10 +2780,14 @@
           const dayKey = formatDateInput(new Date(entry.startTs));
           if (!dayCols.find(c => c.key === dayKey)) return;
           const ticket = entry.ticket || 'Ohne Ticket';
-          if (!ticketMap.has(ticket)) ticketMap.set(ticket, { ticket, days: new Map(), total: 0 });
+          if (!ticketMap.has(ticket)) ticketMap.set(ticket, { ticket, days: new Map(), total: 0, descriptions: new Map() });
           const row = ticketMap.get(ticket);
           row.days.set(dayKey, (row.days.get(dayKey) || 0) + getNetDurationMs(entry));
           row.total += getNetDurationMs(entry);
+          if (entry.ticketDescription) {
+            const latest = row.descriptions.get(entry.ticketDescription) || 0;
+            row.descriptions.set(entry.ticketDescription, Math.max(latest, entry.startTs));
+          }
         });
 
         const ticketRows = [...ticketMap.values()].sort((a, b) => b.total - a.total);
@@ -2643,18 +2816,6 @@
         });
         thead += '<th class="tnum">Summe</th></tr></thead>';
 
-        let tbody = '<tbody>';
-        ticketRows.forEach(tr => {
-          tbody += `<tr><td class="col-ticket"><strong>${escapeHtml(tr.ticket)}</strong></td>`;
-          dayCols.forEach(c => {
-            const ms = tr.days.get(c.key) || 0;
-            const cls = 'tnum' + (c.isWeekend ? ' weekend' : '');
-            tbody += `<td class="${cls}">${ms ? escapeHtml(formatDuration(ms)) : '<span class="muted">·</span>'}</td>`;
-          });
-          tbody += `<td class="tnum"><strong>${escapeHtml(formatDuration(tr.total))}</strong></td></tr>`;
-        });
-        tbody += '</tbody>';
-
         let tfoot = '<tfoot><tr><td class="col-ticket">Tagessumme</td>';
         let weekTotal = 0;
         dayCols.forEach(c => {
@@ -2664,7 +2825,42 @@
         });
         tfoot += `<td class="tnum">${escapeHtml(formatDuration(weekTotal))}</td></tr></tfoot>`;
 
-        table.innerHTML = thead + tbody + tfoot;
+        table.innerHTML = thead + '<tbody></tbody>' + tfoot;
+        const tbody = table.querySelector('tbody');
+        ticketRows.forEach(tr => {
+          const row = document.createElement('tr');
+          const ticketTd = document.createElement('td');
+          ticketTd.className = 'col-ticket';
+          const cell = document.createElement('div');
+          cell.className = 'ticket-cell';
+          const strong = document.createElement('strong');
+          strong.textContent = tr.ticket;
+          cell.appendChild(strong);
+          if (tr.ticket !== 'Ohne Ticket') cell.appendChild(ticketCopyButton(tr.ticket));
+          ticketTd.appendChild(cell);
+          const descEntries = [...tr.descriptions.entries()].sort((a, b) => b[1] - a[1]);
+          if (descEntries.length) {
+            const descLine = document.createElement('div');
+            descLine.className = 'muted';
+            descLine.style.fontSize = '12px';
+            descLine.textContent = descEntries[0][0] + (descEntries.length > 1 ? ` (+${descEntries.length - 1} weitere)` : '');
+            if (descEntries.length > 1) descLine.title = descEntries.slice(1).map(([desc]) => desc).join(', ');
+            ticketTd.appendChild(descLine);
+          }
+          row.appendChild(ticketTd);
+          dayCols.forEach(c => {
+            const ms = tr.days.get(c.key) || 0;
+            const td = document.createElement('td');
+            td.className = 'tnum' + (c.isWeekend ? ' weekend' : '');
+            td.innerHTML = ms ? escapeHtml(formatDuration(ms)) : '<span class="muted">·</span>';
+            row.appendChild(td);
+          });
+          const totalTd = document.createElement('td');
+          totalTd.className = 'tnum';
+          totalTd.innerHTML = `<strong>${escapeHtml(formatDuration(tr.total))}</strong>`;
+          row.appendChild(totalTd);
+          tbody.appendChild(row);
+        });
         wrap.appendChild(table);
         dom.summaryContainer.innerHTML = '';
         dom.summaryContainer.appendChild(wrap);
@@ -2674,13 +2870,25 @@
         const groups = new Map();
         filtered.forEach(entry => {
           const key = getGroupKey(entry, groupBy);
-          const row = groups.get(key) || { key, ms: 0, count: 0, tickets: new Set() };
+          const row = groups.get(key) || { key, ms: 0, count: 0, tickets: new Set(), descriptions: new Map() };
           row.ms += getNetDurationMs(entry);
           row.count += 1;
           if (entry.ticket) row.tickets.add(entry.ticket);
+          if (entry.ticketDescription) {
+            const latest = row.descriptions.get(entry.ticketDescription) || 0;
+            row.descriptions.set(entry.ticketDescription, Math.max(latest, entry.startTs));
+          }
           groups.set(key, row);
         });
-        return [...groups.values()].sort((a, b) => b.ms - a.ms);
+        return [...groups.values()].map(row => {
+          const descEntries = [...row.descriptions.entries()].sort((a, b) => b[1] - a[1]);
+          return {
+            ...row,
+            description: descEntries.length ? descEntries[0][0] : '',
+            descriptionCount: descEntries.length,
+            otherDescriptions: descEntries.slice(1).map(([desc]) => desc)
+          };
+        }).sort((a, b) => b.ms - a.ms);
       }
 
       function renderChart(rows) {
@@ -2895,6 +3103,7 @@
             <tr>
               <th>Datum</th>
               <th>Ticket</th>
+              <th>Beschreibung</th>
               <th>Notizen</th>
               <th>Von</th>
               <th>Bis</th>
@@ -2906,7 +3115,7 @@
           <tbody></tbody>
           <tfoot>
             <tr>
-              <td data-label="Datum" colspan="5">Summe (${filtered.length} ${filtered.length === 1 ? 'Eintrag' : 'Einträge'})</td>
+              <td data-label="Datum" colspan="6">Summe (${filtered.length} ${filtered.length === 1 ? 'Eintrag' : 'Einträge'})</td>
               <td data-label="Pause" class="tnum">${totalPauseMin} min</td>
               <td data-label="Netto" class="tnum">${escapeHtml(formatDuration(totalNetMs))}</td>
               <td></td>
@@ -2919,6 +3128,7 @@
           tr.innerHTML = `
             <td data-label="Datum" class="tnum">${escapeHtml(formatDateOnly(entry.startTs))}</td>
             <td data-label="Ticket"><strong>${escapeHtml(entry.ticket || '—')}</strong></td>
+            <td data-label="Beschreibung">${entry.ticketDescription ? escapeHtml(entry.ticketDescription) : '<span class="muted">—</span>'}</td>
             <td data-label="Notizen">${entry.notes ? escapeHtml(truncate(entry.notes, 140)) : '<span class="muted">—</span>'}</td>
             <td data-label="Von" class="tnum">${escapeHtml(formatTimeOnly(entry.startTs))}</td>
             <td data-label="Bis" class="tnum">${escapeHtml(formatTimeOnly(entry.endTs))}</td>
@@ -2953,7 +3163,7 @@
         return state.entries.filter(entry => {
           if (entry.startTs < from || entry.startTs > to) return false;
           if (!q) return true;
-          const hay = `${entry.ticket} ${entry.notes || ''}`.toLowerCase();
+          const hay = `${entry.ticket} ${entry.ticketDescription || ''} ${entry.notes || ''}`.toLowerCase();
           return hay.includes(q);
         });
       }
@@ -2967,6 +3177,7 @@
         if (!entry) return;
         dom.editId.value = entry.id;
         dom.editTicket.value = entry.ticket || '';
+        dom.editTicketDescription.value = entry.ticketDescription || '';
         dom.editDate.value = formatDateInput(new Date(entry.startTs));
         dom.editStart.value = formatTimeInput(entry.startTs);
         dom.editEnd.value = formatTimeInput(entry.endTs);
@@ -2975,7 +3186,7 @@
         // Set preset dropdown to match ticket if it exists in presets
         if (dom.editTicketPreset && entry.ticket) {
           const tickets = getAllTickets();
-          if (tickets.includes(entry.ticket)) {
+          if (tickets.some(pair => pair.ticket === entry.ticket)) {
             dom.editTicketPreset.value = entry.ticket;
           } else {
             dom.editTicketPreset.value = '';
@@ -2988,7 +3199,8 @@
         const id = dom.editId.value;
         const entry = state.entries.find(e => e.id === id);
         if (!entry) return;
-        const ticket = sanitizeText(dom.editTicket.value, 60);
+        const ticket = sanitizeText(dom.editTicket.value, MAX_TICKET);
+        const ticketDescription = sanitizeText(dom.editTicketDescription.value, MAX_TICKET_DESCRIPTION);
         const notes = sanitizeText(dom.editNotes.value, 2000);
         const date = dom.editDate.value;
         const start = dom.editStart.value;
@@ -3002,7 +3214,7 @@
         if (!end)    { setFieldError(dom.editEnd, 'Pflichtfeld');    firstInvalid = firstInvalid || dom.editEnd; }
         if (firstInvalid) { firstInvalid.focus(); return; }
 
-        rememberTicket(ticket);
+        rememberTicket(ticket, ticketDescription);
         const startTs = localDateTimeToTs(date, start);
         const endTs = localDateTimeToTs(date, end);
         if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) {
@@ -3014,6 +3226,7 @@
           return;
         }
         entry.ticket = ticket;
+        entry.ticketDescription = ticketDescription;
         entry.notes = notes;
         entry.startTs = startTs;
         entry.endTs = endTs;
@@ -3062,12 +3275,13 @@
       }
 
       function exportCsv() {
-        const headers = ['Datum','Start','Ende','Ticket','PauseMinuten','NettoMinuten','Notizen','Quelle'];
+        const headers = ['Datum','Start','Ende','Ticket','Beschreibung','PauseMinuten','NettoMinuten','Notizen','Quelle'];
         const rows = state.entries.slice().sort((a, b) => a.startTs - b.startTs).map(e => [
           formatDateOnly(e.startTs),
           formatTimeOnly(e.startTs),
           formatTimeOnly(e.endTs),
           e.ticket,
+          e.ticketDescription || '',
           String(e.pauseMinutes || 0),
           String(Math.round(getNetDurationMs(e) / 60000)),
           e.notes || '',
@@ -3084,8 +3298,7 @@
         state.entries = importedEntries;
         state.activeTimer = null;
         if (Array.isArray(parsed.ticketSuggestions)) {
-          customTickets = [...new Set(parsed.ticketSuggestions.map(t => sanitizeText(t, 60)).filter(Boolean))]
-            .sort((a, b) => a.localeCompare(b, 'de'));
+          customTickets = dedupeTicketPairs(parsed.ticketSuggestions.map(normalizeTicketPair).filter(pair => pair.ticket));
           saveCustomTickets();
         }
         rememberTicketsFromEntries(state.entries);
@@ -3112,9 +3325,16 @@
       }
 
       function normalizeEntry(e) {
+        // Discriminator is the *presence* of ticketDescription (even ''), not the ticket
+        // text itself — so an already-migrated entry is never split a second time, even
+        // if its ticket number happens to contain a ':'.
+        const pair = typeof e.ticketDescription === 'string'
+          ? { ticket: sanitizeText(e.ticket, MAX_TICKET), description: sanitizeText(e.ticketDescription, MAX_TICKET_DESCRIPTION) }
+          : splitLegacyTicket(e.ticket);
         return {
           id: typeof e.id === 'string' ? e.id : cryptoRandomId(),
-          ticket: sanitizeText(e.ticket, 60),
+          ticket: pair.ticket,
+          ticketDescription: pair.description,
           task: sanitizeText(e.task, 120),
           project: sanitizeText(e.project || '', 120),
           notes: sanitizeText(e.notes || '', 2000),
@@ -3132,9 +3352,13 @@
           Number.isFinite(Number(e.startTs));
       }
       function normalizeActiveTimer(e) {
+        const pair = typeof e.ticketDescription === 'string'
+          ? { ticket: sanitizeText(e.ticket, MAX_TICKET), description: sanitizeText(e.ticketDescription, MAX_TICKET_DESCRIPTION) }
+          : splitLegacyTicket(e.ticket);
         return {
           id: typeof e.id === 'string' ? e.id : cryptoRandomId(),
-          ticket: sanitizeText(e.ticket, 60),
+          ticket: pair.ticket,
+          ticketDescription: pair.description,
           task: sanitizeText(e.task, 120),
           project: sanitizeText(e.project || '', 120),
           notes: sanitizeText(e.notes || '', 2000),
@@ -3146,6 +3370,30 @@
 
       function sanitizeText(value, maxLen) {
         return String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+
+      // Legacy single-field tickets ("ABC-123: Text") are split at the first ':'.
+      // If nothing usable precedes the ':', the whole value stays the ticket number.
+      function splitLegacyTicket(raw) {
+        const value = sanitizeText(raw, MAX_TICKET + MAX_TICKET_DESCRIPTION + 2);
+        const idx = value.indexOf(':');
+        if (idx < 0) return { ticket: sanitizeText(value, MAX_TICKET), description: '' };
+        const ticket = sanitizeText(value.slice(0, idx), MAX_TICKET);
+        if (!ticket) return { ticket: sanitizeText(value, MAX_TICKET), description: '' };
+        const description = sanitizeText(value.slice(idx + 1), MAX_TICKET_DESCRIPTION);
+        return { ticket, description };
+      }
+
+      // Accepts either a bare ticket string (legacy) or a { ticket, description } pair
+      // (current format) and always returns a sanitized pair.
+      function normalizeTicketPair(value) {
+        if (value && typeof value === 'object') {
+          return {
+            ticket: sanitizeText(value.ticket, MAX_TICKET),
+            description: sanitizeText(value.description || '', MAX_TICKET_DESCRIPTION)
+          };
+        }
+        return splitLegacyTicket(value);
       }
 
       function escapeHtml(value) {
@@ -4397,7 +4645,7 @@
             title: 'Timer für diese Aufgabe starten',
             attrs: { 'aria-label': 'Timer für diese Aufgabe starten' },
             onClick: () => {
-              window.LWT.time.startTimerFromTask(task.id, task.externalRef || task.title, '');
+              window.LWT.time.startTimerFromTask(task.id, task.externalRef || task.title, task.externalRef ? task.title : '', '');
               if (window.LWT.shell) window.LWT.shell.switchTab('time');
             }
           }));

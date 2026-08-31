@@ -9,7 +9,7 @@ Vollständige Feldreferenz und die `window.LWT`-Schnittstelle stehen in [`CLAUDE
 | `local-work-tracker-v1-tasks` | Aufgaben | Aufgaben-Array |
 | `local-work-tracker-v1-contexts` | Aufgaben | gemerkte Kontext-Tags |
 | `local-work-tracker-v1-time-entries` | Zeit | Zeiteinträge + laufender Timer |
-| `local-work-tracker-v1-time-entries-ticket-suggestions` | Zeit | Autocomplete-Presets |
+| `local-work-tracker-v1-time-entries-ticket-suggestions` | Zeit | Autocomplete-Presets — `{ ticket, description }`-Paare |
 | `local-work-tracker-v1-time-entries-pomodoro` | Zeit | Pomodoro-Zustand |
 | `local-work-tracker-v1-notes` | App-Shell | Notiz-Widget der Sticky-Bar — `{ version, text, updatedAt }`, reines Markdown ohne Rendering, max. 20.000 Zeichen |
 | `local-work-tracker-v1-theme` | App-Shell | `'light'` \| `'dark'` |
@@ -39,6 +39,12 @@ Ein Zeiteintrag ist unabhängig von Aufgaben gültig — `taskId` ist optional u
 - oder automatisch, wenn die eingetippte Ticket-Nr. exakt (case-insensitive) dem `externalRef` oder Titel einer offenen Aufgabe entspricht (`resolveTaskIdForTicket`).
 
 Die kumulierte Zeit pro Aufgabe wird nicht persistiert, sondern bei jedem Rendern aus allen Zeiteinträgen mit passender `taskId` neu berechnet (`getTrackedMs`/`getTrackedMinutesLabel`) — bearbeitet oder löscht man einen Zeiteintrag, ist die Anzeige auf der Aufgabenkarte beim nächsten Rendern automatisch korrekt.
+
+## Ticket-Nr. und Beschreibung
+
+`ticket` (Ticket-Nr., max. 60 Zeichen) und `ticketDescription` (Beschreibung, max. 120 Zeichen) sind seit der Trennung zwei getrennte Felder — vorher ein einziges Freitextfeld nach dem Muster „ABC-123: Beschreibung". Alte Einträge werden beim ersten Laden/Import/Snapshot-Restore einmalig am ersten `:` aufgesplittet (`splitLegacyTicket`, aufgerufen aus `normalizeEntry`/`normalizeActiveTimer`); ein bereits migrierter Eintrag (erkennbar daran, dass er schon ein — ggf. leeres — `ticketDescription` trägt) wird nie erneut gesplittet. Die Ticket-Vorschläge folgen demselben Muster: aus dem alten `string[]` wurden `{ ticket, description }`-Paare (`normalizeTicketPair`, `dedupeTicketPairs`). Details siehe `docs/architecture.md`'s Abschnitt „Ticket number/description split, precisely".
+
+In der Schnellauswahl (Preset-Dropdown, Autocomplete-Datalist) wird immer „Ticketnummer: Beschreibung" gemeinsam angezeigt, aber nur die Nummer eingefügt. Die Gruppenauswertung im Zeit-Tab gruppiert ausschließlich nach `ticket` und zeigt die Beschreibung des jeweils jüngsten Eintrags dieser Gruppe (mit Hinweis, wenn mehrere unterschiedliche Beschreibungen vorkommen) sowie eine Schaltfläche zum Kopieren der Ticketnummer.
 
 ## Migration
 
