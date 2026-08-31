@@ -364,6 +364,12 @@
     }
     .copy-btn:hover { color: var(--accent); background: var(--row-hover); border-color: var(--border); }
     .summary-desc-more { margin-left: 4px; }
+    .ticket-copy-label {
+      cursor: pointer; border-bottom: 1px dashed var(--muted); padding-bottom: 1px;
+      border-radius: 2px;
+    }
+    .ticket-copy-label:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .ticket-copy-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     dialog {
       width: min(780px, calc(100vw - 24px)); border: 1px solid var(--border);
       border-radius: 14px; background: var(--dialog-bg); color: var(--text); padding: 0;
@@ -2665,8 +2671,22 @@
         pill.textContent = isPending ? '● Geplant' : '● Aktiv';
         const ticketLabel = document.createElement('strong');
         ticketLabel.textContent = a.ticket || '—';
+        if (a.ticket) {
+          ticketLabel.classList.add('ticket-copy-label');
+          ticketLabel.title = 'Klicken zum Kopieren der Ticketnummer';
+          ticketLabel.setAttribute('role', 'button');
+          ticketLabel.setAttribute('tabindex', '0');
+          const doCopy = async () => {
+            const ok = await copyToClipboard(a.ticket);
+            if (ok) showToast(`Ticketnummer kopiert: ${a.ticket}`, { variant: 'good' });
+            else showToast('Kopieren fehlgeschlagen.', { variant: 'bad' });
+          };
+          ticketLabel.addEventListener('click', doCopy);
+          ticketLabel.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); doCopy(); }
+          });
+        }
         topRow.append(pill, ticketLabel);
-        if (a.ticket) topRow.appendChild(ticketCopyButton(a.ticket));
         if (a.ticketDescription) {
           const desc = document.createElement('span');
           desc.className = 'muted';

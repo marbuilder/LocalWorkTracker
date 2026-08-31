@@ -236,8 +236,13 @@ source (`loadState()`, `importPayload()`, `restoreSnapshot()`):
   tracks a `Map<description, latestStartTs>` per group and surfaces the description of the most
   recently started entry, with a `descriptionCount`/`otherDescriptions` hint when a ticket has
   more than one. A small clipboard-copy button (`ticketCopyButton`) sits next to the ticket
-  number in that table only — not in the entries list, not in the sticky bar (an explicit,
-  narrower choice than "everywhere a ticket number appears").
+  number in that table — not in the entries list (an explicit, narrower choice than
+  "everywhere a ticket number appears"). The sticky bar's running timer (`renderCurrentTimer`)
+  gets the same copy-to-clipboard behavior but through a different affordance: the ticket
+  number itself (`.ticket-copy-label`, dashed underline, `role="button"`, keyboard-operable) is
+  clickable and copies on click/Enter/Space, rather than adding a separate icon button — there
+  isn't enough horizontal room in the compact sticky bar for both the ticket text and an icon
+  to stay comfortably tappable.
 
 ## If you're about to change something
 
