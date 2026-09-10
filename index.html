@@ -1071,8 +1071,17 @@
             <input id="manualEnd" type="time" step="60">
           </div>
           <div class="field s3">
+            <label for="manualDuration">Dauer</label>
+            <input id="manualDuration" placeholder="z. B. 2h" autocomplete="off" inputmode="decimal">
+          </div>
+          <div class="field s3">
             <label for="manualPause">Pause (Min.)</label>
             <input id="manualPause" type="number" min="0" step="1" value="0" inputmode="numeric">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field s12">
+            <div class="ticket-help">Alternativ zu Start/Ende: Dauer angeben (z. B. 2h). Start bleibt dann leer = 00:00 Uhr.</div>
           </div>
         </div>
         <div class="row">
@@ -1303,7 +1312,11 @@
         <div class="field s3"><label for="editDate">Datum</label><input id="editDate" type="date"></div>
         <div class="field s3"><label for="editStart">Start</label><input id="editStart" type="time" step="60"></div>
         <div class="field s3"><label for="editEnd">Ende</label><input id="editEnd" type="time" step="60"></div>
+        <div class="field s3"><label for="editDuration">Dauer</label><input id="editDuration" placeholder="z. B. 2h" autocomplete="off" inputmode="decimal"></div>
         <div class="field s3"><label for="editPause">Pause (Min.)</label><input id="editPause" type="number" min="0" step="1" inputmode="numeric"></div>
+      </div>
+      <div class="row">
+        <div class="field s12"><div class="ticket-help">Alternativ zu Start/Ende: Dauer angeben (z. B. 2h). Start bleibt dann leer = 00:00 Uhr.</div></div>
       </div>
       <div class="row">
         <div class="field s12"><label for="editNotes">Notizen</label><textarea id="editNotes"></textarea></div>
@@ -1847,14 +1860,14 @@
       function bindElements() {
         [
           'ticketNumber','ticketDescription','ticketNumberPreset','timerStartTime','taskNotes','startBtn','stopBtn','resetFormBtn',
-          'manualTicket','manualTicketDescription','manualTicketPreset','manualDate','manualStart','manualEnd','manualPause','manualNotes','addManualBtn',
+          'manualTicket','manualTicketDescription','manualTicketPreset','manualDate','manualStart','manualEnd','manualDuration','manualPause','manualNotes','addManualBtn',
           'filterFrom','filterTo','filterTicket','groupBy','clearFiltersBtn','ticketSuggestions',
           'prevDayBtn','todayBtn','nextDayBtn','dayFocus','applyDayBtn',
           'presetTicketInput','presetDescriptionInput','addPresetTicketBtn','presetListContainer','exportTicketsBtn','importTicketsBtn','importTicketsFile',
           'createSnapshotBtn','snapshotListContainer',
           'pomodoroBar','pomodoroPill','pomodoroDisplay','pomodoroSubtitle','pomodoroDuration','pomodoroStartBtn','pomodoroStopBtn',
           'currentTimer','currentTimerStatus','stats','summaryContainer','entriesContainer','summaryChart','chartSubtitle','chartTooltip',
-          'editId','editTicket','editTicketDescription','editTicketPreset','editDate','editStart','editEnd','editPause','editNotes','cancelEditBtn','saveEditBtn',
+          'editId','editTicket','editTicketDescription','editTicketPreset','editDate','editStart','editEnd','editDuration','editPause','editNotes','cancelEditBtn','saveEditBtn',
           'confirmDialogTitle','confirmDialogMessage','confirmDialogActions','toastRoot'
         ].forEach(id => dom[id] = qs(id));
         dom.editDialog = document.getElementById('timeEditDialog');
@@ -2612,22 +2625,35 @@
         const date = dom.manualDate.value;
         const start = dom.manualStart.value;
         const end = dom.manualEnd.value;
+        const durationMinutes = parseDurationHoursToMinutes(dom.manualDuration.value);
+        const useDuration = durationMinutes !== null && !Number.isNaN(durationMinutes);
         const pauseMinutes = clampNumber(dom.manualPause.value, 0, 24 * 60);
         const notes = sanitizeText(dom.manualNotes.value, 2000);
 
         let firstInvalid = null;
         if (!ticket) { setFieldError(dom.manualTicket, 'Pflichtfeld'); firstInvalid = firstInvalid || dom.manualTicket; }
         if (!date)   { setFieldError(dom.manualDate, 'Pflichtfeld');   firstInvalid = firstInvalid || dom.manualDate; }
-        if (!start)  { setFieldError(dom.manualStart, 'Pflichtfeld');  firstInvalid = firstInvalid || dom.manualStart; }
-        if (!end)    { setFieldError(dom.manualEnd, 'Pflichtfeld');    firstInvalid = firstInvalid || dom.manualEnd; }
+        if (Number.isNaN(durationMinutes)) {
+          setFieldError(dom.manualDuration, 'Ungültiges Format (z. B. 2h oder 1,5h)');
+          firstInvalid = firstInvalid || dom.manualDuration;
+        } else if (!useDuration) {
+          if (!start) { setFieldError(dom.manualStart, 'Pflichtfeld'); firstInvalid = firstInvalid || dom.manualStart; }
+          if (!end)   { setFieldError(dom.manualEnd, 'Pflichtfeld');   firstInvalid = firstInvalid || dom.manualEnd; }
+        }
         if (firstInvalid) { firstInvalid.focus(); return; }
 
         rememberTicket(ticket, ticketDescription);
 
-        const startTs = localDateTimeToTs(date, start);
-        const endTs = localDateTimeToTs(date, end);
+        let startTs, endTs;
+        if (useDuration) {
+          startTs = localDateTimeToTs(date, start || '00:00');
+          endTs = startTs + durationMinutes * 60000;
+        } else {
+          startTs = localDateTimeToTs(date, start);
+          endTs = localDateTimeToTs(date, end);
+        }
         if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) {
-          setFieldError(dom.manualEnd, 'Ende muss nach Start liegen.');
+          setFieldError(useDuration ? dom.manualDuration : dom.manualEnd, 'Ende muss nach Start liegen.');
           return;
         }
         if ((endTs - startTs) / 60000 <= pauseMinutes) {
@@ -2645,6 +2671,7 @@
         if (dom.manualTicketPreset) dom.manualTicketPreset.value = '';
         dom.manualStart.value = '';
         dom.manualEnd.value = '';
+        dom.manualDuration.value = '';
         dom.manualPause.value = '0';
         dom.manualNotes.value = '';
         showToast('Eintrag gespeichert.', { variant: 'good' });
@@ -3224,6 +3251,7 @@
         dom.editDate.value = formatDateInput(new Date(entry.startTs));
         dom.editStart.value = formatTimeInput(entry.startTs);
         dom.editEnd.value = formatTimeInput(entry.endTs);
+        dom.editDuration.value = '';
         dom.editPause.value = String(entry.pauseMinutes || 0);
         dom.editNotes.value = entry.notes || '';
         // Set preset dropdown to match ticket if it exists in presets
@@ -3248,20 +3276,33 @@
         const date = dom.editDate.value;
         const start = dom.editStart.value;
         const end = dom.editEnd.value;
+        const durationMinutes = parseDurationHoursToMinutes(dom.editDuration.value);
+        const useDuration = durationMinutes !== null && !Number.isNaN(durationMinutes);
         const pauseMinutes = clampNumber(dom.editPause.value, 0, 24 * 60);
 
         let firstInvalid = null;
         if (!ticket) { setFieldError(dom.editTicket, 'Pflichtfeld'); firstInvalid = firstInvalid || dom.editTicket; }
         if (!date)   { setFieldError(dom.editDate, 'Pflichtfeld');   firstInvalid = firstInvalid || dom.editDate; }
-        if (!start)  { setFieldError(dom.editStart, 'Pflichtfeld');  firstInvalid = firstInvalid || dom.editStart; }
-        if (!end)    { setFieldError(dom.editEnd, 'Pflichtfeld');    firstInvalid = firstInvalid || dom.editEnd; }
+        if (Number.isNaN(durationMinutes)) {
+          setFieldError(dom.editDuration, 'Ungültiges Format (z. B. 2h oder 1,5h)');
+          firstInvalid = firstInvalid || dom.editDuration;
+        } else if (!useDuration) {
+          if (!start) { setFieldError(dom.editStart, 'Pflichtfeld'); firstInvalid = firstInvalid || dom.editStart; }
+          if (!end)   { setFieldError(dom.editEnd, 'Pflichtfeld');   firstInvalid = firstInvalid || dom.editEnd; }
+        }
         if (firstInvalid) { firstInvalid.focus(); return; }
 
         rememberTicket(ticket, ticketDescription);
-        const startTs = localDateTimeToTs(date, start);
-        const endTs = localDateTimeToTs(date, end);
+        let startTs, endTs;
+        if (useDuration) {
+          startTs = localDateTimeToTs(date, start || '00:00');
+          endTs = startTs + durationMinutes * 60000;
+        } else {
+          startTs = localDateTimeToTs(date, start);
+          endTs = localDateTimeToTs(date, end);
+        }
         if (!Number.isFinite(startTs) || !Number.isFinite(endTs) || endTs <= startTs) {
-          setFieldError(dom.editEnd, 'Ende muss nach Start liegen.');
+          setFieldError(useDuration ? dom.editDuration : dom.editEnd, 'Ende muss nach Start liegen.');
           return;
         }
         if ((endTs - startTs) / 60000 <= pauseMinutes) {
@@ -3484,6 +3525,16 @@
 
       function localDateTimeToTs(date, time) {
         return new Date(`${date}T${time}:00`).getTime();
+      }
+
+      function parseDurationHoursToMinutes(value) {
+        const trimmed = String(value || '').trim();
+        if (!trimmed) return null;
+        const match = trimmed.match(/^(\d+(?:[.,]\d+)?)\s*h$/i);
+        if (!match) return NaN;
+        const hours = parseFloat(match[1].replace(',', '.'));
+        if (!Number.isFinite(hours) || hours <= 0) return NaN;
+        return Math.round(hours * 60);
       }
 
       function formatDuration(ms) {

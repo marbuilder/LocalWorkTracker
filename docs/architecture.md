@@ -36,7 +36,8 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Escalation guardrail | `escalateTask`, `changeEffort` ('toolarge' branch) | TaskModule |
 | "Rahmen unklar" (`tbd`) guardrail — unframed work is routed to the backlog, not planned | `guardFooter` ('tbd' branch), `planTask` (blocks 'tbd' like 'toolarge'), `changeEffort` ('tbd' branch, same retroactive backlog-bounce as 'toolarge'), `renderBacklogCard` (omits the dead "In `<Woche>`" button for 'tbd') | TaskModule |
 | Daily backup | `isBackupDue`, `runBackup`, `getBackupStatus`, `buildBackupPayload` | TaskModule |
-| Timer start/stop, manual entries | `startTimer`, `internalStopTimer`, `autoStopActiveTimerIfDayEnded` | TimeModule |
+| Timer start/stop | `startTimer`, `internalStopTimer`, `autoStopActiveTimerIfDayEnded` | TimeModule |
+| Manual entries (add/edit), incl. optional "Dauer" input (e.g. `2h`) as an alternative to Start/Ende — Start defaults to `00:00` of the chosen date when left empty | `addManualEntry`, `saveEditEntry`, `openEditDialog`, `parseDurationHoursToMinutes` | TimeModule |
 | Pomodoro | `renderPomodoro`, the Pomodoro `setInterval` tick | TimeModule |
 | Filters/stats/chart, Gruppenauswertung (Ticket + Beschreibung, copy button) | filter-row handlers, `renderChart` (canvas), `buildSummaryRows`, `ticketCopyButton` | TimeModule |
 | Snapshots, ticket presets (number/description pairs) | Snapshot `<details>` handlers, ticket-suggestion datalist wiring, `normalizeTicketPair`, `dedupeTicketPairs`, `splitLegacyTicket` | TimeModule |
