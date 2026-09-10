@@ -958,6 +958,12 @@
 
     <div class="current-row sticky-bar">
       <div class="current-side current-side-main">
+        <div id="quickCapture" class="current quick-capture" aria-live="polite">
+          <div class="capture-row">
+            <input id="quickCaptureInput" type="text" placeholder="Was ist dir aufgefallen?" autocomplete="off" maxlength="120">
+            <button id="quickCaptureBtn" class="primary">Erfassen</button>
+          </div>
+        </div>
         <div id="currentTimer" class="current current-compact" aria-live="polite">
           <div id="currentTimerStatus" class="current-status"></div>
           <div class="ticket-row current-ticket-row ticket-row-split">
@@ -1017,12 +1023,6 @@
         </div>
       </div>
       <div class="current-side current-side-aside">
-        <div id="quickCapture" class="current quick-capture" aria-live="polite">
-          <div class="capture-row">
-            <input id="quickCaptureInput" type="text" placeholder="Was ist dir aufgefallen?" autocomplete="off" maxlength="120">
-            <button id="quickCaptureBtn" class="primary">Erfassen</button>
-          </div>
-        </div>
         <section id="notesWidget" class="current notes-widget" aria-labelledby="notesTitle">
           <div class="notes-head">
             <h2 id="notesTitle" class="notes-title">Notizen</h2>
