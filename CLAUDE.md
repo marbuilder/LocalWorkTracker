@@ -26,7 +26,7 @@ The two areas are linked: a time entry may carry an optional `taskId` back to a 
 1. **Boot** — runs the one-time legacy-storage migration (see below) and applies the persisted/preferred theme to `<body>` before anything renders, to avoid a flash of the wrong theme.
 2. **TimeModule** — the former LocalTimetracker script, close to verbatim. Defines `window.LWT.time` as its public surface for the shell and TaskModule.
 3. **TaskModule** — the former LocalTasks script, close to verbatim. Defines `window.LWT.tasks`. Loads after TimeModule so it can safely read `window.LWT.time` while rendering (tracked-minutes pill, ticket-to-task resolution).
-4. **AppShell** — new glue code only: main-tab switching (Zeit/Aufgaben/Daten), the unified theme toggle, and the Daten tab (backup/export/import/clear across both datasets, plus TimeModule's relocated snapshot and ticket-preset management).
+4. **AppShell** — new glue code only: main-tab switching (Zeit/Aufgaben/Einstellungen), the unified theme toggle, the Zeittracking feature toggle, and the Einstellungen tab — formerly "Daten", internal `data-main-tab="daten"` kept unchanged — (backup/export/import/clear across both datasets, plus TimeModule's relocated snapshot and ticket-preset management).
 
 **Read [`docs/architecture.md`](docs/architecture.md) before making a structural change** (new cross-module feature, renamed/removed DOM id, anything touching the sticky bar, tab switching, theming, or the Daten tab). It has the full DOM tree, the renamed-id table, the complete `window.LWT` surface with what each method does and who calls it, and a "where do I make this change" decision guide — everything below in this section is the short version.
 
@@ -34,8 +34,8 @@ Each module keeps its own internal state, storage keys, and rendering — they d
 
 **`window.LWT` surface:**
 - `LWT.time.getActiveTimer()`, `LWT.time.startTimerFromTask(taskId, ticketLabel, ticketDescription, notes)`, `LWT.time.getTrackedMinutesLabel(taskId)`, `LWT.time.getExportPayload()`, `LWT.time.exportCsv()`, `LWT.time.importPayload(parsed)`, `LWT.time.clearAllData()`, `LWT.time.refreshChartTheme()`.
-- `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`, `LWT.tasks.captureTask(title)` (used by AppShell's global sticky-bar quick-capture widget).
-- `LWT.shell.switchTab(name)` — `'time'`, `'tasks'`, or `'daten'`.
+- `LWT.tasks.findTask(id)`, `LWT.tasks.focusTasks()`, `LWT.tasks.searchableTasks()`, `LWT.tasks.getExportPayload()` / `exportJson()` / `exportCsv()`, `LWT.tasks.importPayload(parsed)`, `LWT.tasks.clearAllData()`, `LWT.tasks.isBackupDue()`, `LWT.tasks.setBackupInterval(days)`, `LWT.tasks.getBackupStatus()`, `LWT.tasks.runBackup(manual)`, `LWT.tasks.captureTask(title)` (used by AppShell's global sticky-bar quick-capture widget), `LWT.tasks.refreshView()` (re-renders TaskModule's own view; used by AppShell after the Zeittracking feature toggle changes).
+- `LWT.shell.switchTab(name)` — `'time'`, `'tasks'`, or `'daten'`. `LWT.shell.isTimeTrackingEnabled()` — reads the Zeittracking feature toggle (Einstellungen tab); consumed by TaskModule's timer-pill/▶-button guards and by TimeModule's global keyboard shortcuts.
 - `LWT.notes.getExportPayload()`, `LWT.notes.importPayload(parsed)` (no-op if `parsed.notes` is absent — never wipes the existing note), `LWT.notes.clearAllData()` — the sticky-bar notes widget (plain-text scratchpad, no Markdown rendering).
 
 When adding to either module, prefer extending this surface over reaching into the other module's internals directly.
@@ -117,6 +117,7 @@ Sanitized with `sanitizeNotes(value)` (AppShell), not the modules' `sanitizeText
 | `local-work-tracker-v1-time-entries-snapshot-*` | manual local backups (Zeit tab) |
 | `local-work-tracker-v1-notes` | sticky-bar notes widget (plain text, no rendering) |
 | `local-work-tracker-v1-theme` | `'light'` \| `'dark'`, owned exclusively by AppShell |
+| `local-work-tracker-v1-time-tracking-enabled` | Zeittracking feature toggle (Einstellungen tab), `'true'` \| `'false'`, missing/invalid → enabled; owned exclusively by AppShell |
 
 ### Legacy migration
 

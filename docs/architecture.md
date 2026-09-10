@@ -15,7 +15,7 @@ LocalWorkTracker is LocalTasks and LocalTimetracker pushed into one `index.html`
 | 1 | ~812–856 | **Boot** | Legacy-key migration, initial theme (before first paint) |
 | 2 | ~1214–3194 | **TimeModule** | Timer, Pomodoro, manual entries, filters/stats/chart, snapshots, ticket presets | `window.LWT.time` |
 | 3 | ~3196–4739 | **TaskModule** | Inbox/Triage/Woche/Backlog/Archiv, escalation, daily backup | `window.LWT.tasks` |
-| 4 | ~4874–5063 | **AppShell** | Main-tab switching, theme toggle, Daten tab, Notiz-Widget (Sticky-Bar) | `window.LWT.shell`, `window.LWT.notes` |
+| 4 | ~4874–5063 | **AppShell** | Main-tab switching, theme toggle, Einstellungen tab (formerly "Daten"), Zeittracking feature toggle, Notiz-Widget (Sticky-Bar) | `window.LWT.shell`, `window.LWT.notes` |
 
 Line numbers drift as the file is edited — treat the table as "which script, in which order", and re-`grep -n "<script>"` if you need exact numbers. Order matters: TimeModule must load before TaskModule (TaskModule's card rendering reads `window.LWT.time` while rendering), and both must load before AppShell (AppShell wires buttons that call into both).
 
@@ -42,7 +42,8 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Filters/stats/chart, Gruppenauswertung (Ticket + Beschreibung, copy button) | filter-row handlers, `renderChart` (canvas), `buildSummaryRows`, `ticketCopyButton` | TimeModule |
 | Snapshots, ticket presets (number/description pairs) | Snapshot `<details>` handlers, ticket-suggestion datalist wiring, `normalizeTicketPair`, `dedupeTicketPairs`, `splitLegacyTicket` | TimeModule |
 | Task ↔ time linking | `resolveTaskIdForTicket`, `startTimerFromTask`, `getTrackedMs`/`getTrackedMinutesLabel` | Time↔Task, see below |
-| Tab switching, theme toggle, Daten tab | `switchTab`, theme click handler, Daten tab wiring | AppShell |
+| Tab switching, theme toggle, Einstellungen tab (formerly "Daten") | `switchTab`, theme click handler, Daten tab wiring | AppShell |
+| Zeittracking feature toggle (`#timeTrackingToggle` in the Einstellungen tab) — hides the Zeit tab button, `#currentTimer` (not `#pomodoroBar`, which stays visible/usable regardless) and the task-card timer pill/▶ button; never touches stored data | `isTimeTrackingEnabled`, `setTimeTrackingEnabled`, `applyTimeTrackingVisibility` (AppShell); consumed via `window.LWT.shell.isTimeTrackingEnabled()` by TaskModule's `taskMeta()`/`renderPlannedCard` guards and TimeModule's `handleGlobalShortcut` | AppShell, consumed by TaskModule + TimeModule |
 | Notiz-Widget (Sticky-Bar, freies Markdown ohne Rendering) | `sanitizeNotes`, `loadNotes`/`saveNotes`, `scheduleNotesSave`/`flushNotesSave`, `setNotesStatus` | AppShell |
 | Legacy storage migration | `LEGACY_MAP` copy loop | Boot |
 
@@ -70,10 +71,12 @@ window.LWT = {
     importPayload(parsed), clearAllData(),
     isBackupDue(), daysSinceLastBackup(), setBackupInterval(days), getBackupStatus(), runBackup(manual),
     getTaskCount(),
-    captureTask(title)                              // creates an inbox task + re-renders TaskModule's own view; used by AppShell's global quick-capture widget in the sticky bar
+    captureTask(title),                             // creates an inbox task + re-renders TaskModule's own view; used by AppShell's global quick-capture widget in the sticky bar
+    refreshView()                                   // re-runs TaskModule's own render() — used by AppShell after the Zeittracking toggle changes, so the timer pill/▶ button on task cards updates immediately
   },
   shell: {
-    switchTab(name)  // 'time' | 'tasks' | 'daten'
+    switchTab(name),                // 'time' | 'tasks' | 'daten'
+    isTimeTrackingEnabled()         // reads the Zeittracking feature toggle; consumed by TaskModule's guards and TimeModule's handleGlobalShortcut
   },
   notes: {
     getExportPayload(),   // { text, updatedAt } — read by TaskModule's combined backup
@@ -111,17 +114,17 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
     <header class="app-head">                 -- title, #themeToggleBtn, #shortcutHelp (Zeit-only keyboard-shortcut popover, right of the theme toggle) (AppShell-owned)
     <div id="task-backupBanner" hidden>        -- rendered by TaskModule, placed in the header so it's visible from either tab
     <div class="current-row sticky-bar">        -- sticky bar (stickiness lives here, not on the individual widgets — see "CSS" below), always visible on every main tab, two `.current-side` columns:
-      <div class="current-side current-side-main">   -- AppShell-owned wrapper, stacks the following two:
-        <div id="currentTimer">                -- TimeModule-owned; static shell holding #currentTimerStatus (live-rendered by renderCurrentTimer()) plus the former "Timer starten" panel's controls, now laid out as three rows — status on top, `#ticketNumber`/`#ticketDescription`/`#ticketNumberPreset` on their own full-width `.ticket-row.ticket-row-split` (three columns: number, description, preset — so a typed ticket number is never text-clipped by competing for space with the other fields), then one flex-wrapping controls row below (`.current-controls`: `#timerStartTime`, notes, time-info, buttons) — stretched with `justify-content: space-between` (see "CSS" below) to fill the left column's height next to `#pomodoroBar` below it on desktop widths (>1050px): #timerStartTime (label dropped, `aria-label` only), #taskNotes inside a `<details class="field-info current-notes-popover" data-ui-key="timerNotes">` — a text button "Notiz", not an icon (reuses the `.field-info` floating-popover pattern instead of a block `.compact-menu`, so opening it never changes the box's height), the (i) time-usage hint (also `.field-info`), and #startBtn/#stopBtn/#resetFormBtn as normal text buttons ("Start"/"Stop"/"Leeren", sized to match `.pomodoro-buttons button`) — moved here verbatim, "Timer starten" panel removed from the Zeit tab
-        <div id="pomodoroBar">                 -- TimeModule-owned, unchanged markup/JS from LocalTimetracker
-      <div class="current-side current-side-aside">  -- AppShell-owned wrapper, stacks the following two:
+      <div class="current-side current-side-main">   -- AppShell-owned wrapper, stacks the following three:
         <div id="quickCapture">                 -- AppShell-owned; #quickCaptureInput + #quickCaptureBtn, calls LWT.tasks.captureTask(title) (no tab switch, no dialog)
+        <div id="currentTimer">                -- TimeModule-owned; static shell holding #currentTimerStatus (live-rendered by renderCurrentTimer()) plus the former "Timer starten" panel's controls, now laid out as three rows — status on top, `#ticketNumber`/`#ticketDescription`/`#ticketNumberPreset` on their own full-width `.ticket-row.ticket-row-split` (three columns: number, description, preset — so a typed ticket number is never text-clipped by competing for space with the other fields), then one flex-wrapping controls row below (`.current-controls`: `#timerStartTime`, notes, time-info, buttons) — stretched with `justify-content: space-between` (see "CSS" below) to fill the left column's height next to `#pomodoroBar` below it on desktop widths (>1050px): #timerStartTime (label dropped, `aria-label` only), #taskNotes inside a `<details class="field-info current-notes-popover" data-ui-key="timerNotes">` — a text button "Notiz", not an icon (reuses the `.field-info` floating-popover pattern instead of a block `.compact-menu`, so opening it never changes the box's height), the (i) time-usage hint (also `.field-info`), and #startBtn/#stopBtn/#resetFormBtn as normal text buttons ("Start"/"Stop"/"Leeren", sized to match `.pomodoro-buttons button`) — moved here verbatim, "Timer starten" panel removed from the Zeit tab. `hidden` toggled by AppShell's `applyTimeTrackingVisibility()` when the Zeittracking feature toggle is off — `#pomodoroBar` is unaffected and stays visible.
+        <div id="pomodoroBar">                 -- TimeModule-owned, unchanged markup/JS from LocalTimetracker; always visible regardless of the Zeittracking feature toggle
+      <div class="current-side current-side-aside">  -- AppShell-owned wrapper, holds:
         <section id="notesWidget">              -- AppShell-owned; #notesTitle, #notesStatus (save-state indicator, aria-hidden), #notesInput — a plain `<textarea>`, no Markdown rendering, no edit/preview toggle; autosaves debounced via LWT.notes
-    <nav id="mainTabbar">                      -- 3 buttons, data-main-tab="time"|"tasks"|"daten" (AppShell-owned)
+    <nav id="mainTabbar">                      -- 3 buttons, data-main-tab="time"|"tasks"|"daten" (AppShell-owned); the "time" button is `hidden` by `applyTimeTrackingVisibility()` when the Zeittracking feature toggle is off
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
       <section id="tabPanelTasks" hidden>      -- #task-tabbar + #task-viewRoot (TaskModule's own inner router, unchanged)
-      <section id="tabPanelDaten" hidden>      -- backup/export/import/clear (AppShell-owned) + relocated Snapshots/Ticket-Presets <details> (TimeModule-owned content, AppShell-owned tab panel) — the one place a tab panel's content isn't wholly owned by the module its name matches
+      <section id="tabPanelDaten" hidden>      -- Einstellungen tab (button label "⚙️ Einstellungen", `data-main-tab="daten"` kept internally): "Funktionen" panel with `#timeTrackingToggle` (AppShell-owned, the Zeittracking feature toggle) + backup/export/import/clear (AppShell-owned) + relocated Snapshots/Ticket-Presets <details> (TimeModule-owned content, AppShell-owned tab panel) — the one place a tab panel's content isn't wholly owned by the module its name matches
     <footer class="app-footer">                -- static GitHub Pages / localStorage-only privacy note (AppShell-owned, no JS)
   </div>
 
@@ -167,9 +170,9 @@ Breakpoints: `1050px` (two-column grids collapse, incl. `.current-row`, for narr
 
 **Stickiness lives on `.current-row`, not on the individual widgets.** Each of the four widgets used to carry `.sticky-bar` itself (`position: sticky` needs a containing block with real scrollable room to travel in); once they're nested inside the two `.current-side` column wrappers, a widget's containing block would become that wrapper instead of the page, and its travel range would shrink to almost nothing. Hoisting `.sticky-bar` (and its `position: sticky; top: 8px; z-index: 5`) to `.current-row` keeps one sticky unit whose containing block is still `.container`, so the whole bar travels exactly as before.
 
-The sticky bar has two columns now, both using `.current-side` (AppShell-owned): `.current-side-main` stacks `#currentTimer` + `#pomodoroBar`, `.current-side-aside` stacks `#quickCapture` + `#notesWidget`. `.current-row` uses CSS Grid's default `align-items: stretch`, so both columns are always exactly as tall as the taller one. Within each column, one designated child grows to absorb the slack: `#currentTimer` on the left (via `.current-compact`'s own `flex-direction:column; justify-content:space-between`, unchanged from before) and `#notesWidget` on the right (via `flex: 1 1 auto` on `.current-side > #currentTimer, .current-side > #notesWidget`) — that's what keeps both columns' bottoms flush regardless of which side happens to be taller (a running timer's extra status lines, or simply nothing new). `.current-side`'s own `justify-content: space-between` is only a fallback for the pathological case where the growing child's own `min-height` already exceeds the available slack.
+The sticky bar has two columns now, both using `.current-side` (AppShell-owned): `.current-side-main` stacks `#quickCapture` + `#currentTimer` + `#pomodoroBar`, `.current-side-aside` holds `#notesWidget` alone (`#quickCapture` moved into the left column so notes has the right column to itself). `.current-row` uses CSS Grid's default `align-items: stretch`, so both columns are always exactly as tall as the taller one. Within each column, one designated child grows to absorb the slack: `#currentTimer` on the left (via `.current-compact`'s own `flex-direction:column; justify-content:space-between`, unchanged from before) and `#notesWidget` on the right (via `flex: 1 1 auto` on `.current-side > #currentTimer, .current-side > #notesWidget`) — that's what keeps both columns' bottoms flush regardless of which side happens to be taller (a running timer's extra status lines, or simply nothing new). `.current-side`'s own `justify-content: space-between` is only a fallback for the pathological case where the growing child's own `min-height` already exceeds the available slack.
 
-`#notesWidget`'s `.notes-input` textarea uses `flex: 1 1 0; min-height: 0` so a long note scrolls inside its own fixed-height box instead of growing and re-stretching the left column — the note's content never drives the row height. Below the `1050px` breakpoint `.current-row` collapses to one column (DOM order becomes Timer → Pomodoro → Schnellerfassung → Notizen), so nothing is stretched, `justify-content:space-between`/`flex:1 1 auto` have no visible effect, and `.notes-input` is instead allowed to grow naturally up to `max-height: 40vh`.
+`#notesWidget`'s `.notes-input` textarea uses `flex: 1 1 0; min-height: 0` so a long note scrolls inside its own fixed-height box instead of growing and re-stretching the left column — the note's content never drives the row height. Below the `1050px` breakpoint `.current-row` collapses to one column (DOM order becomes Schnellerfassung → Timer → Pomodoro → Notizen), so nothing is stretched, `justify-content:space-between`/`flex:1 1 auto` have no visible effect, and `.notes-input` is instead allowed to grow naturally up to `max-height: 40vh`.
 
 `renderCurrentTimer()`'s active-state markup puts the `.pill` ("● Aktiv"/"● Geplant") and the ticket name on the same flex row (`display:flex; gap:8px` inline style), with the start-time line below — mirroring the idle state's two-line shape ("Kein aktiver Timer" + subtitle) so switching between idle/active doesn't change `#currentTimerStatus`'s height and doesn't stress the `.current-side` height-matching described above.
 
@@ -193,6 +196,21 @@ If you're chasing a theme bug, it's in the boot script or AppShell — not in Ti
 `#shortcutHelp` (⌨️, in `.app-head-actions` right of `#themeToggleBtn`) is **not** tab-gated, on purpose: `TimeModule`'s `handleGlobalShortcut` (Ctrl+Enter, Esc, Alt+arrows, Alt+T) is bound on `document` with no active-tab check, so a running timer can be stopped with Esc and the day shortcuts still work even while the Aufgaben tab is showing — hiding the legend there would hide documentation for shortcuts that are still live. (Any element that *would* need per-tab hiding still must pair its CSS `display` rule with a `[hidden] { display: none; }` override, same pattern as `.tab-panel[hidden]` — otherwise the plain rule's equal-or-higher specificity beats the UA default and the `hidden` attribute does nothing. `.shortcut-help[hidden]` is kept for exactly that reason, even though nothing sets it today.)
 
 `window.LWT.shell.switchTab('time')` is how the Aufgaben ▶ button jumps to the Zeit tab after starting a timer (`TaskModule`, inside `renderPlannedCard`, guarded with `if (window.LWT.shell)`).
+
+## Zeittracking feature toggle
+
+A checkbox (`#timeTrackingToggle`) in the Einstellungen tab's "Funktionen" panel lets the user hide the time-tracking UI without losing any tracked data. State lives in `local-work-tracker-v1-time-tracking-enabled` (`'true'`/`'false'`, missing/invalid → enabled), owned entirely by AppShell — `isTimeTrackingEnabled()`/`setTimeTrackingEnabled(enabled)`, exposed for other modules as `window.LWT.shell.isTimeTrackingEnabled()`.
+
+`applyTimeTrackingVisibility()` (AppShell) is the single function that reconciles all visible state from the flag, called once at boot (after computing `savedTab`, with the fallback also steered away from `'time'` when disabled) and again whenever the checkbox changes:
+- Hides/shows the Zeit tab button (`#mainTabbar button[data-main-tab="time"]`) and, if the Zeit tab is currently open when disabling, calls `switchTab('tasks')`.
+- Hides/shows only `#currentTimer` (the timer start/stop form) — **`#pomodoroBar` is deliberately left alone** and stays visible/usable either way, since Pomodoro isn't considered part of "Zeittracking" for this toggle. `#quickCapture`, `#currentTimer` and `#pomodoroBar` all live in `.current-side-main` as stacked flex children (in that order), so hiding `#currentTimer` just leaves `#quickCapture` and `#pomodoroBar` filling the column — no CSS grid changes needed.
+- Calls `window.LWT.tasks.refreshView()` (a thin wrapper around TaskModule's own `render()`) so the ⏱ tracked-minutes pill and ▶ start-timer button disappear/reappear on task cards immediately.
+
+The toggle never calls any module's `clearAllData()` — it is purely a UI visibility switch; TimeModule's own boot code (state load, `setInterval`, Pomodoro rendering) is untouched, so re-enabling shows everything exactly as it was.
+
+Two other places consume the flag directly:
+- `TaskModule`'s `taskMeta()` and `renderPlannedCard()` extend their existing `if (window.LWT && window.LWT.time)` guards with `&& (!window.LWT.shell || window.LWT.shell.isTimeTrackingEnabled())`, matching the established defensive-guard style used for cross-module calls.
+- `TimeModule`'s `handleGlobalShortcut` (see above) returns early when the flag is off, so Ctrl+Enter/Esc/Alt-day-navigation don't silently operate a hidden timer. This is checked at runtime (on keypress), not at boot, so the load-order caveat that affects other `window.LWT.shell` consumers at synchronous init time doesn't apply here — by the time a user can press a key, AppShell has already run.
 
 ## Task ↔ time linking, precisely
 
