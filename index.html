@@ -269,6 +269,7 @@
        paints on top of #currentTimer's own popovers (.field-info-tip) when they overflow past
        its box, clipping them visually. */
     #currentTimer { position: relative; z-index: 2; }
+    #currentTimer[hidden] { display: none; }
     .current-compact {
       flex-direction: column; align-items: stretch; justify-content: space-between;
     }
@@ -660,6 +661,7 @@
       white-space: nowrap; display: inline-flex; align-items: center; gap: 8px;
     }
     .tabbar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tabbar button[hidden] { display: none; }
     .tab-badge {
       display: inline-flex; align-items: center; justify-content: center;
       min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
@@ -1034,7 +1036,7 @@
     <nav class="tabbar" id="mainTabbar" aria-label="Hauptbereiche">
       <button type="button" data-main-tab="time">⏱ Zeit</button>
       <button type="button" data-main-tab="tasks">✅ Aufgaben</button>
-      <button type="button" data-main-tab="daten">🗂 Daten</button>
+      <button type="button" data-main-tab="daten">⚙️ Einstellungen</button>
     </nav>
 
     <main id="mainViewRoot">
@@ -1182,6 +1184,15 @@
       </section>
       <section id="tabPanelDaten" class="tab-panel" hidden>
     <div class="grid">
+      <section class="panel full">
+        <h2>Funktionen</h2>
+        <label style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="timeTrackingToggle">
+          Zeittracking aktivieren
+        </label>
+        <p class="hint">Blendet den Zeit-Tab, das Timer-Formular in der Kopfzeile sowie die Zeit-Anzeigen auf Aufgaben-Karten aus. Der Pomodoro-Timer bleibt davon unberührt. Bereits erfasste Zeiten gehen dabei nicht verloren.</p>
+      </section>
+
       <section class="panel full">
         <h2>Sicherung</h2>
         <div class="muted" style="font-size:12px" id="lastBackupInfo">Letztes Backup: –</div>
@@ -2329,6 +2340,7 @@
       }
 
       function handleGlobalShortcut(event) {
+        if (window.LWT && window.LWT.shell && !window.LWT.shell.isTimeTrackingEnabled()) return;
         // Ctrl/Cmd+Enter starts timer when typing in any timer-form field
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
           const timerFields = [dom.ticketNumber, dom.taskNotes, dom.timerStartTime];
@@ -4533,7 +4545,7 @@
         if (task.context) meta.appendChild(pill(task.context));
         if (task.externalRef) meta.appendChild(pill(task.externalRef, 'state-escalated'));
         if (task.carryCount > 0) meta.appendChild(pill(`${task.carryCount}× verschoben`));
-        if (window.LWT && window.LWT.time) {
+        if (window.LWT && window.LWT.time && (!window.LWT.shell || window.LWT.shell.isTimeTrackingEnabled())) {
           const tracked = window.LWT.time.getTrackedMinutesLabel(task.id);
           if (tracked) meta.appendChild(pill('⏱ ' + tracked));
         }
@@ -4733,7 +4745,7 @@
           onClick: () => toggleToday(task.id)
         });
         actions.appendChild(star);
-        if (window.LWT && window.LWT.time) {
+        if (window.LWT && window.LWT.time && (!window.LWT.shell || window.LWT.shell.isTimeTrackingEnabled())) {
           actions.appendChild(button('▶', {
             className: 'primary reorder-btn',
             title: 'Timer für diese Aufgabe starten',
@@ -5301,7 +5313,8 @@
           const task = captureTask(title);
           if (task) render();
           return task;
-        }
+        },
+        refreshView: render
       };
 
       init();
@@ -5386,10 +5399,35 @@
       tabButtons.forEach(function (btn) {
         btn.addEventListener('click', function () { switchTab(btn.getAttribute('data-main-tab')); });
       });
-      window.LWT.shell = { switchTab: switchTab };
+
+      /* ── Zeittracking feature toggle ─────────────────────────── */
+      var TIME_TRACKING_KEY = 'local-work-tracker-v1-time-tracking-enabled';
+      function isTimeTrackingEnabled() {
+        try { return localStorage.getItem(TIME_TRACKING_KEY) !== 'false'; }
+        catch (err) { return true; }
+      }
+      var timeTabButton = document.querySelector('#mainTabbar button[data-main-tab="time"]');
+      var currentTimerEl = qs('currentTimer');
+      function applyTimeTrackingVisibility() {
+        var enabled = isTimeTrackingEnabled();
+        if (timeTabButton) timeTabButton.hidden = !enabled;
+        if (currentTimerEl) currentTimerEl.hidden = !enabled;
+        if (!enabled && panels.time && !panels.time.hidden) switchTab('tasks');
+        if (window.LWT.tasks && typeof window.LWT.tasks.refreshView === 'function') {
+          window.LWT.tasks.refreshView();
+        }
+      }
+      function setTimeTrackingEnabled(enabled) {
+        try { localStorage.setItem(TIME_TRACKING_KEY, enabled ? 'true' : 'false'); } catch (err) { /* ignore */ }
+        applyTimeTrackingVisibility();
+      }
+
+      window.LWT.shell = { switchTab: switchTab, isTimeTrackingEnabled: isTimeTrackingEnabled };
       var savedTab = 'time';
       try { savedTab = localStorage.getItem('local-work-tracker-v1-ui-active-tab') || 'time'; } catch (err) { /* ignore */ }
+      if (savedTab === 'time' && !isTimeTrackingEnabled()) savedTab = 'tasks';
       switchTab(panels[savedTab] ? savedTab : 'time');
+      applyTimeTrackingVisibility();
 
       /* ── Global quick capture (sticky bar) ──────────────────── */
       var quickCaptureInput = qs('quickCaptureInput');
@@ -5511,6 +5549,13 @@
       };
 
       /* ── Daten tab wiring ───────────────────────────────────── */
+      var timeTrackingToggle = qs('timeTrackingToggle');
+      if (timeTrackingToggle) {
+        timeTrackingToggle.checked = isTimeTrackingEnabled();
+        timeTrackingToggle.addEventListener('change', function () {
+          setTimeTrackingEnabled(timeTrackingToggle.checked);
+        });
+      }
       var lastBackupInfo = qs('lastBackupInfo');
       var backupIntervalSelect = qs('backupIntervalSelect');
 
