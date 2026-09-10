@@ -94,6 +94,7 @@
         const manualDate = doc.getElementById('manualDate');
         const manualStart = doc.getElementById('manualStart');
         const manualEnd = doc.getElementById('manualEnd');
+        const manualDuration = doc.getElementById('manualDuration');
         const manualPause = doc.getElementById('manualPause');
         const addBtn = doc.getElementById('addManualBtn');
 
@@ -163,6 +164,48 @@
           !!toast,
           toast ? toast.textContent : 'kein passender Toast unter ' + toasts.length
         );
+
+        // Case 5: invalid duration format -> .field-error neben manualDuration
+        dispatchInput(manualTicket, 'T2');
+        dispatchInput(manualStart, '');
+        dispatchInput(manualEnd, '');
+        dispatchInput(manualPause, '0');
+        dispatchInput(manualDuration, 'abc');
+        addBtn.click();
+        await waitRaf(2);
+        const durationFormatError = manualDuration.parentElement.querySelector('.field-error');
+        record(
+          'ungültiges Dauer-Format → .field-error neben Dauer-Input',
+          !!durationFormatError && durationFormatError.textContent.length > 0,
+          durationFormatError ? durationFormatError.textContent : 'kein .field-error'
+        );
+
+        // Case 6: valid duration, empty start/end -> entry added with start = 00:00 of the date
+        const entriesBefore = doc.querySelectorAll('#entriesContainer table tbody tr').length;
+        dispatchInput(manualDuration, '2h');
+        addBtn.click();
+        await waitRaf(3);
+        const entriesAfterDuration = doc.querySelectorAll('#entriesContainer table tbody tr').length;
+        record(
+          'gültige Dauer (2h) ohne Start/Ende → Eintrag wird angelegt',
+          entriesAfterDuration === entriesBefore + 1,
+          `vorher=${entriesBefore} nachher=${entriesAfterDuration}`
+        );
+
+        // Case 7: duration <= pause -> pause error still applies
+        dispatchInput(manualTicket, 'T3');
+        dispatchInput(manualDuration, '1h');
+        dispatchInput(manualPause, '60');
+        addBtn.click();
+        await waitRaf(2);
+        const durationPauseError = manualPause.parentElement.querySelector('.field-error');
+        record(
+          'Dauer <= Pause → .field-error neben Pause-Input',
+          !!durationPauseError && /Pause/i.test(durationPauseError.textContent),
+          durationPauseError ? durationPauseError.textContent : 'kein .field-error'
+        );
+        dispatchInput(manualDuration, '');
+        dispatchInput(manualPause, '0');
 
         record('keine ungefangenen Exceptions waehrend Validierung', caughtErrors.length === 0, caughtErrors.map(e => e.message).join('\n') || 'keine');
         renderResults();
