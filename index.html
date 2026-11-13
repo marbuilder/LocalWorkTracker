@@ -705,8 +705,9 @@
     }
 
     /* ── Task cards ────────────────────────────────────────────── */
-    /* Compact two-line cards: [handle][check] ticket · title / meta / notes,
-       with the actions (.task-hover) revealed on hover or keyboard focus. */
+    /* Compact two-line cards: [handle][check] ticket: title / meta / notes,
+       with the action symbols (.task-hover) always visible on the right;
+       only the drag handle, copy buttons and "+ Ticket" are hover-revealed. */
     .task-list { display: flex; flex-direction: column; gap: 6px; }
     .task-card {
       position: relative;
@@ -817,18 +818,15 @@
     button.small-btn { width: auto; min-height: 26px; height: 26px; padding: 0 10px; font-size: 12px; }
     .star-btn { border-radius: 999px; background: transparent; border-color: var(--border); color: var(--muted); }
     .star-btn.on { color: var(--warn); border-color: var(--warn); }
-    /* Hover reveal: visibility (not display/opacity) so a starred task's ★
-       can stay visible on its own and the layout doesn't jump. */
-    .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; visibility: hidden; margin-top: -2px; /* 26px buttons centred on the 22px title line */ }
+    /* Action symbols are always visible. Secondary helpers are revealed on
+       hover/focus via visibility, so the layout doesn't jump. */
+    .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; margin-top: -2px; /* 26px buttons centred on the 22px title line */ }
     .hover-only { visibility: hidden; }
-    .task-hover .star-btn.on { visibility: visible; }
-    .task-card:hover .task-hover, .task-card:focus-within .task-hover,
     .task-card:hover .hover-only, .task-card:focus-within .hover-only,
     .task-card:hover .copy-btn, .task-card:focus-within .copy-btn,
     .task-card:hover .drag-handle, .task-card:focus-within .drag-handle { visibility: visible; }
     @media (hover: none) {
-      .task-hover, .hover-only, .copy-btn, .drag-handle { visibility: visible; }
-      .task-card .task-hover { display: flex !important; }
+      .hover-only, .copy-btn, .drag-handle { visibility: visible; }
     }
     /* ⋯ card menu (native <details>) */
     details.card-menu { position: relative; }
@@ -859,13 +857,15 @@
     .task-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .task-toolbar .tabbar { flex: 1 1 auto; }
     .task-toolbar #taskSearch { width: auto; flex: 0 1 280px; min-width: 180px; }
-    .capture-row.with-ticket { grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) minmax(0, 140px); }
+    /* Inbox Schnellerfassung: a single row, barely taller than its inputs. */
+    .panel.capture-panel { padding: 8px 10px; }
+    .capture-row.with-ticket { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr) auto auto; align-items: center; gap: 6px; }
+    .capture-row.with-ticket input { min-height: 36px; padding: 6px 10px; }
+    .capture-row.with-ticket button { width: auto; min-height: 36px; padding: 6px 14px; }
+    .capture-row.with-ticket button.icon-btn { height: 36px; padding: 0 10px; font-size: 15px; }
+    .capture-row.with-ticket button.icon-btn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
     .capture-ticket { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    textarea.capture-notes { margin-top: 8px; min-height: 120px; resize: vertical; }
-    button.link-btn {
-      width: auto; min-height: 0; margin-top: 6px; padding: 2px 4px;
-      background: transparent; border-color: transparent; color: var(--accent); font-size: 13px;
-    }
+    textarea.capture-notes { margin-top: 6px; min-height: 90px; resize: vertical; }
     .edit-panel-foot { display: flex; justify-content: flex-end; }
     .edit-panel-foot button { width: auto; min-height: 30px; padding: 4px 12px; font-size: 13px; }
 
@@ -1003,14 +1003,14 @@
       .app-head { flex-direction: column; align-items: stretch; }
       .app-head-actions { justify-content: flex-end; }
       .chip-group { align-items: flex-start; flex-direction: column; gap: 4px; }
-      .capture-row.with-ticket { grid-template-columns: 1fr; }
+      .capture-row.with-ticket { grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) auto auto; }
+      .capture-row.with-ticket button:not(.icon-btn) { padding: 6px 10px; }
       .task-toolbar #taskSearch { flex: 1 1 100%; }
-      /* Narrow: the action bar wraps below the text instead of squeezing
-         the title; with a mouse it only takes room while revealed. */
+      /* Narrow: the action symbols wrap below the text instead of
+         squeezing the title. */
       .task-row { flex-wrap: wrap; }
       .task-body { flex: 1 1 calc(100% - 60px); }
       .task-hover { margin-left: auto; }
-      .task-card:not(:hover):not(:focus-within) .task-hover:not(:has(.star-btn.on)) { display: none; }
       .triage { padding-left: 0; }
     }
 
@@ -5118,6 +5118,15 @@
         return card;
       }
 
+      function backlogIconButton(task) {
+        return button('↩\uFE0E', {
+          className: 'icon-btn',
+          title: 'Ins Backlog',
+          attrs: { 'aria-label': 'Ins Backlog' },
+          onClick: () => moveToBacklog(task.id)
+        });
+      }
+
       function renderPlannedCard(task, now, opts = {}) {
         // Manual drag&drop priorisation is scoped to this card type only
         // (Woche/Geplant) — see attachReorder(). draggable is false for the
@@ -5150,6 +5159,15 @@
           }));
         }
 
+        const nextWeek = shortWeek(weekKeyOffset(task.plannedWeek, 1));
+        hover.appendChild(button('⏭\uFE0E', {
+          className: 'icon-btn',
+          title: `In ${nextWeek} verschieben`,
+          attrs: { 'aria-label': `In ${nextWeek} verschieben` },
+          onClick: () => carryOverTask(task.id, 1)
+        }));
+        hover.appendChild(backlogIconButton(task));
+
         let upItem = null;
         let downItem = null;
         if (draggable) {
@@ -5159,8 +5177,6 @@
           if (peerIdx >= 0 && peerIdx < peers.length - 1) downItem = { label: 'Nach unten', onClick: () => moveTaskStep(task.id, 1) };
         }
         const menu = cardMenu([
-          { label: 'In ' + shortWeek(weekKeyOffset(task.plannedWeek, 1)) + ' verschieben', onClick: () => carryOverTask(task.id, 1) },
-          { label: 'Ins Backlog', onClick: () => moveToBacklog(task.id) },
           upItem,
           downItem,
           detailsToggleItem(task),
@@ -5257,8 +5273,8 @@
             carryOverTask(task.id, delta > 0 ? delta : 1);
           }
         }));
+        hover.appendChild(backlogIconButton(task));
         const menu = cardMenu([
-          { label: 'Ins Backlog', onClick: () => moveToBacklog(task.id) },
           detailsToggleItem(task),
           contextItem(task),
           addNoteItem(task),
@@ -5348,11 +5364,13 @@
       function renderInboxView(now) {
         const frag = document.createDocumentFragment();
 
-        const capture = el('section', { className: 'panel' });
-        capture.appendChild(el('div', { className: 'panel-head' }, [el('h2', { text: 'Schnellerfassung' })]));
+        const capture = el('section', { className: 'panel capture-panel', attrs: { 'aria-label': 'Schnellerfassung' } });
         const captureRow = el('div', { className: 'capture-row with-ticket' });
         const ticketInput = el('input', { type: 'text', className: 'capture-ticket', attrs: { id: 'captureTicket', placeholder: 'Ticket', 'aria-label': 'Ticket (optional)', autocomplete: 'off', maxlength: String(MAX_EXTERNAL_REF) } });
-        const input = el('input', { type: 'text', attrs: { id: 'captureInput', placeholder: 'Was ist dir aufgefallen?', 'aria-label': 'Titel', autocomplete: 'off', maxlength: String(MAX_TITLE) } });
+        const input = el('input', { type: 'text', attrs: {
+          id: 'captureInput', placeholder: 'Was ist dir aufgefallen?', 'aria-label': 'Titel', autocomplete: 'off', maxlength: String(MAX_TITLE),
+          title: 'Enter genügt — Ticket und Notiz sind optional, „ABC-123: Titel" wird automatisch aufgeteilt. Priorität kommt später, Aufwand ist optional.'
+        } });
         const submit = button('Erfassen', { className: 'primary' });
         let notesInput = null;
         const doCapture = () => {
@@ -5367,35 +5385,37 @@
           if (ev.key === 'Enter') { ev.preventDefault(); doCapture(); }
         }));
         submit.addEventListener('click', doCapture);
+        const notesToggle = button('📝', {
+          className: 'icon-btn',
+          title: ui.captureNotesOpen ? 'Notiz ausblenden' : 'Notiz hinzufügen',
+          attrs: { 'aria-label': 'Notiz hinzufügen', 'aria-pressed': ui.captureNotesOpen ? 'true' : 'false' },
+          onClick: () => {
+            // Keep what was already typed across the re-render.
+            const keepTicket = ticketInput.value;
+            const keepTitle = input.value;
+            const keepNotes = notesInput ? notesInput.value : '';
+            ui.captureNotesOpen = !ui.captureNotesOpen;
+            render();
+            const t = document.getElementById('captureTicket');
+            const i = document.getElementById('captureInput');
+            const n = document.getElementById('captureNotes');
+            if (t) t.value = keepTicket;
+            if (i) i.value = keepTitle;
+            if (n) { n.value = keepNotes; n.focus(); } else if (i) i.focus();
+          }
+        });
         captureRow.appendChild(ticketInput);
         captureRow.appendChild(input);
+        captureRow.appendChild(notesToggle);
         captureRow.appendChild(submit);
         capture.appendChild(captureRow);
         if (ui.captureNotesOpen) {
-          notesInput = el('textarea', { className: 'capture-notes', attrs: { id: 'captureNotes', placeholder: 'Notiz (optional)', 'aria-label': 'Notiz (optional)', maxlength: String(MAX_NOTES) } });
+          notesInput = el('textarea', { className: 'capture-notes', attrs: { id: 'captureNotes', placeholder: 'Notiz (optional) — Strg+Enter erfasst', 'aria-label': 'Notiz (optional)', maxlength: String(MAX_NOTES) } });
           notesInput.addEventListener('keydown', ev => {
             if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); doCapture(); }
           });
           capture.appendChild(notesInput);
-        } else {
-          capture.appendChild(button('+ Notiz', {
-            className: 'link-btn',
-            onClick: () => {
-              // Keep what was already typed across the re-render.
-              const keepTicket = ticketInput.value;
-              const keepTitle = input.value;
-              ui.captureNotesOpen = true;
-              render();
-              const t = document.getElementById('captureTicket');
-              const i = document.getElementById('captureInput');
-              if (t) t.value = keepTicket;
-              if (i) i.value = keepTitle;
-              const n = document.getElementById('captureNotes');
-              if (n) n.focus();
-            }
-          }));
         }
-        capture.appendChild(el('p', { className: 'hint', text: 'Enter genügt — Ticket und Notiz sind optional, „ABC-123: Titel" wird automatisch aufgeteilt. Priorität kommt später, Aufwand ist optional.' }));
         frag.appendChild(capture);
 
         const tasks = inboxTasks();
