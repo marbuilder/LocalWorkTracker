@@ -758,8 +758,15 @@
       display: inline-flex; align-items: baseline; margin-right: 6px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 12.5px; font-weight: 600; color: var(--accent); white-space: nowrap;
+      font-family: inherit;
     }
-    .ticket-chip::after { content: ':'; color: var(--accent); order: 1; }
+    .ticket-chip .ticket-text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    /* The colon uses the title's proportional font: a monospace ':' sits
+       centred in a full-width cell and looks detached from the ticket. */
+    .ticket-chip::after {
+      content: ':'; order: 1; color: var(--accent);
+      font-family: inherit; font-size: 14px; margin-left: 1px;
+    }
     .ticket-chip button.copy-btn { display: none; order: 2; margin-left: 2px; align-self: center; }
     .task-card:hover .ticket-chip button.copy-btn, .task-card:focus-within .ticket-chip button.copy-btn { display: inline-flex; }
     @media (hover: none) { .ticket-chip button.copy-btn { display: inline-flex; } }
