@@ -728,18 +728,18 @@
     .task-card:has(details.card-menu[open]) { z-index: 20; }
     .task-row { display: flex; gap: 8px; align-items: flex-start; }
     .drag-handle {
-      flex: 0 0 auto; width: 12px; margin-left: -4px; padding-top: 3px;
-      color: var(--muted); font-size: 14px; line-height: 1; cursor: grab; user-select: none;
+      flex: 0 0 auto; width: 12px; margin-left: -4px;
+      color: var(--muted); font-size: 14px; line-height: 22px; cursor: grab; user-select: none;
       visibility: hidden;
     }
     .drag-handle:active { cursor: grabbing; }
     button.task-check {
-      flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; padding: 0; margin-top: 2px;
+      flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; padding: 0; margin-top: 2px; /* centre on the 22px title line */
       border-radius: 50%; border: 2px solid var(--muted); background: transparent;
     }
     button.task-check:hover { border-color: var(--good); background: rgba(48,196,141,.2); }
     .task-check.static {
-      flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px;
+      flex: 0 0 auto; width: 18px; height: 22px;
       display: inline-flex; align-items: center; justify-content: center;
       font-size: 12px; font-weight: 700; color: var(--muted);
     }
@@ -747,33 +747,29 @@
     .task-check.static.state-escalated { color: var(--accent); }
     .task-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     /* Title line flows as inline text, so a ticket prefix wraps together
-       with the title instead of breaking onto its own row. */
-    .task-line { display: block; line-height: 1.35; overflow-wrap: anywhere; }
+       with the title instead of breaking onto its own row. A fixed 22px
+       line box keeps ticket, title, copy buttons and the round check on one
+       optical line: inline buttons are top-aligned and never taller than
+       the line, so revealing them on hover can't move the text. */
+    .task-line { display: block; font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
     .task-title-wrap { display: inline; }
     .task-title { font-weight: 600; }
-    /* Ticket = a quiet prefix "ABC-123: Titel": accent-coloured monospace,
-       no box, ":" right after it. Its ⧉ copy button only takes space while
-       revealed (hover/focus/touch), so at rest the gap is a normal space. */
-    .ticket-chip {
-      display: inline-flex; align-items: baseline; margin-right: 6px;
+    /* Ticket = a quiet prefix "ABC-123: Titel": accent-coloured monospace
+       (same size and baseline as the title), no box, ":" right after it. */
+    .ticket-chip { display: inline; margin-right: 5px; white-space: nowrap; color: var(--accent); font-weight: 600; }
+    .ticket-chip .ticket-text {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12.5px; font-weight: 600; color: var(--accent); white-space: nowrap;
-      font-family: inherit;
+      font-size: 13px; vertical-align: baseline; line-height: 1; /* don't grow the 22px line box */
     }
-    .ticket-chip .ticket-text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    /* The colon uses the title's proportional font: a monospace ':' sits
-       centred in a full-width cell and looks detached from the ticket. */
-    .ticket-chip::after {
-      content: ':'; order: 1; color: var(--accent);
-      font-family: inherit; font-size: 14px; margin-left: 1px;
+    .task-line button.copy-btn, .task-line .ticket-add {
+      vertical-align: top; height: 20px; min-height: 0; margin-top: 1px; line-height: 18px;
     }
-    .ticket-chip button.copy-btn { display: none; order: 2; margin-left: 2px; align-self: center; }
+    .ticket-chip button.copy-btn { display: none; margin-left: 2px; }
     .task-card:hover .ticket-chip button.copy-btn, .task-card:focus-within .ticket-chip button.copy-btn { display: inline-flex; }
     @media (hover: none) { .ticket-chip button.copy-btn { display: inline-flex; } }
     button.ticket-add {
-      width: auto; min-height: 0; padding: 0 6px; font-size: 11px; line-height: 1.5;
+      width: auto; padding: 0 6px; font-size: 11px;
       background: transparent; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px;
-      vertical-align: middle;
     }
     .task-title-wrap .ticket-add { margin-left: 6px; }
     .task-line > .ticket-add { margin-right: 6px; }
@@ -823,7 +819,7 @@
     .star-btn.on { color: var(--warn); border-color: var(--warn); }
     /* Hover reveal: visibility (not display/opacity) so a starred task's ★
        can stay visible on its own and the layout doesn't jump. */
-    .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; visibility: hidden; }
+    .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; visibility: hidden; margin-top: -2px; /* 26px buttons centred on the 22px title line */ }
     .hover-only { visibility: hidden; }
     .task-hover .star-btn.on { visibility: visible; }
     .task-card:hover .task-hover, .task-card:focus-within .task-hover,
@@ -4959,6 +4955,9 @@
         if (task.externalRef) {
           const chip = el('span', { className: 'ticket-chip' });
           chip.appendChild(editableText(task, 'externalRef', el('span', { className: 'ticket-text', text: task.externalRef })));
+          // A real element (not ::after) so the colon stays glued to the
+          // ticket and the hover-only copy button comes after it.
+          chip.appendChild(el('span', { className: 'ticket-sep', text: ':' }));
           chip.appendChild(copyButton(() => task.externalRef, 'Ticket'));
           line.appendChild(chip);
           line.appendChild(titleWrap);
