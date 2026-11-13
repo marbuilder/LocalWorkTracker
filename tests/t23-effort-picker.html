@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T23 effort picker</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T23 Effort Picker (setTaskEffort)</h1>
+  <p>Pins <code>setTaskEffort(id, key|null)</code>, the select-semantics reducer behind the clickable effort pill on Woche/Backlog cards (and the edit panel via <code>changeEffort</code>'s toggle): null clears without touching the status, <code>toolarge</code>/<code>tbd</code> bounce a planned task to the backlog, re-picking the active key and unknown keys are no-ops. Logic is duplicated inline from <code>index.html</code>'s TaskModule, per project convention.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      // ── Mirrors index.html TaskModule ──
+      const EFFORT_KEYS = ['quick', 'small', 'medium', 'toolarge', 'tbd'];
+      const toasts = [];
+      const showToast = msg => toasts.push(msg);
+      const tasks = [];
+      const findTask = id => tasks.find(t => t.id === id) || null;
+      let clock = 1000;
+      const touch = t => { t.updatedAt = ++clock; };
+      function setTaskEffort(id, effort) {
+        const task = findTask(id);
+        if (!task || (effort !== null && !EFFORT_KEYS.includes(effort)) || task.effort === effort) return;
+        task.effort = effort;
+        if (task.status === 'planned' && (effort === 'toolarge' || effort === 'tbd')) {
+          task.status = 'backlog';
+          task.plannedWeek = null;
+          task.todayFlag = false;
+          const reason = effort === 'toolarge' ? 'Als „Größer — Story"' : 'Mit unklarem Rahmen';
+          showToast(reason + ' kann die Aufgabe nicht geplant bleiben — zurück ins Backlog.');
+        }
+        touch(task);
+      }
+      function changeEffort(id, effort) {
+        const task = findTask(id);
+        if (!task || !EFFORT_KEYS.includes(effort)) return;
+        setTaskEffort(id, task.effort === effort ? null : effort);
+      }
+      const make = o => { const t = Object.assign({ id: 't' + tasks.length, priority: 'eighty', effort: 'small', status: 'planned', plannedWeek: '2026-W46', todayFlag: true, updatedAt: 0 }, o); tasks.push(t); return t; };
+
+      const a = make();
+      setTaskEffort(a.id, null);
+      assert('picking "keine Angabe" clears the effort and keeps the task planned', a.effort === null && a.status === 'planned' && a.plannedWeek === '2026-W46', a);
+      setTaskEffort(a.id, 'medium');
+      assert('picking a normal effort keeps the task planned', a.effort === 'medium' && a.status === 'planned', a);
+
+      const b = make();
+      setTaskEffort(b.id, 'toolarge');
+      assert('toolarge bounces a planned task to the backlog with a toast', b.status === 'backlog' && b.plannedWeek === null && b.todayFlag === false && toasts.length === 1, { b, toasts });
+      const c = make();
+      setTaskEffort(c.id, 'tbd');
+      assert('tbd bounces a planned task to the backlog too', c.status === 'backlog' && c.plannedWeek === null && toasts.length === 2, c);
+      const d = make({ status: 'backlog', plannedWeek: null, todayFlag: false });
+      setTaskEffort(d.id, 'toolarge');
+      assert('in the backlog, toolarge only updates the field', d.status === 'backlog' && d.effort === 'toolarge' && toasts.length === 2, d);
+
+      const e = make({ effort: 'small' });
+      const before = e.updatedAt;
+      setTaskEffort(e.id, 'small');
+      setTaskEffort(e.id, 'huge');
+      setTaskEffort('missing', 'small');
+      assert('re-picking the active key, unknown keys and unknown ids are no-ops', e.effort === 'small' && e.updatedAt === before, e);
+
+      const f = make({ effort: 'quick' });
+      changeEffort(f.id, 'quick');
+      assert('edit-panel changeEffort still toggles the active chip off', f.effort === null && f.status === 'planned', f);
+      const tbody = document.getElementById('results');
+      let passCount = 0;
+      results.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = r.name;
+        const tdResult = document.createElement('td');
+        tdResult.textContent = r.pass ? 'PASS' : 'FAIL';
+        tdResult.className = r.pass ? 'pass' : 'fail';
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = r.details;
+        tr.append(tdName, tdResult, tdDetails);
+        tbody.appendChild(tr);
+        if (r.pass) passCount++;
+      });
+      document.getElementById('status').textContent =
+        `${passCount}/${results.length} checks passed.`;
+    })();
+  </script>
+</body>
+</html>
