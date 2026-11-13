@@ -4892,19 +4892,6 @@
         return { label: task.context ? 'Kontext ändern …' : 'Kontext hinzufügen …', onClick: () => editContext(task.id) };
       }
 
-      // Opens the notes editor on a card that has no note yet.
-      function addNoteItem(task) {
-        if (task.notes) return null;
-        return {
-          label: 'Notiz hinzufügen',
-          onClick: () => {
-            const card = document.querySelector(`#task-viewRoot .task-card[data-task-id="${CSS.escape(task.id)}"]`);
-            const slot = card && card.querySelector('.task-notes-slot');
-            if (slot) startInlineEdit(task, 'notes', slot);
-          }
-        };
-      }
-
       /* ── Card shell ────────────────────────────────────────── */
 
       // opts.check: { onClick, title } for the round "Erledigt" checkbox, or
@@ -4985,8 +4972,15 @@
           notesWrap.appendChild(copyButton(() => task.notes, 'Notiz'));
           body.appendChild(notesWrap);
         } else {
-          // Invisible anchor for "Notiz hinzufügen" (see addNoteItem).
-          body.appendChild(el('div', { className: 'task-notes-slot empty-slot' }));
+          // Same pattern as "+ Ticket": a hover-only "+ Notiz" at the end of
+          // the title line opens the notes editor in this empty slot.
+          const slot = el('div', { className: 'task-notes-slot empty-slot' });
+          body.appendChild(slot);
+          titleWrap.appendChild(button('+ Notiz', {
+            className: 'ticket-add hover-only',
+            title: 'Notiz hinzufügen',
+            onClick: ev => { ev.stopPropagation(); startInlineEdit(task, 'notes', slot); }
+          }));
         }
         row.appendChild(body);
 
@@ -5107,7 +5101,7 @@
         const { card, body, hover } = taskCardShell(task, now, {
           check: { onClick: () => completeTask(task.id), title: 'Sofort erledigt' }
         });
-        const menu = cardMenu([contextItem(task), addNoteItem(task), { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }]);
+        const menu = cardMenu([contextItem(task), { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }]);
         if (menu) hover.appendChild(menu);
         if (opts.compact) return card;
         const triage = el('div', { className: 'triage' });
@@ -5181,7 +5175,6 @@
           downItem,
           detailsToggleItem(task),
           contextItem(task),
-          addNoteItem(task),
           { label: 'Als Story eskalieren …', onClick: () => escalateTask(task.id) },
           { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }
         ]);
@@ -5215,7 +5208,6 @@
         const menu = cardMenu([
           detailsToggleItem(task),
           contextItem(task),
-          addNoteItem(task),
           task.effort !== 'toolarge' ? { label: 'Als Story eskalieren …', onClick: () => escalateTask(task.id) } : null,
           { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }
         ]);
@@ -5277,7 +5269,6 @@
         const menu = cardMenu([
           detailsToggleItem(task),
           contextItem(task),
-          addNoteItem(task),
           { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }
         ]);
         if (menu) hover.appendChild(menu);
