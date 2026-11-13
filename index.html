@@ -726,7 +726,16 @@
     .task-card.focus.prio-eighty { border-left-color: var(--warn); }
     .task-card.focus.prio-nice { border-left-color: var(--muted); }
     .task-card.dragging { opacity: .4; }
-    .task-card:has(details.card-menu[open]) { z-index: 20; }
+    .task-card:has(details.card-menu[open]), .task-card:has(details.pill-menu[open]) { z-index: 20; }
+    /* Priority/effort pill pickers (Woche/Backlog) */
+    details.pill-menu { position: relative; display: inline-block; }
+    details.pill-menu > summary { list-style: none; cursor: pointer; user-select: none; }
+    details.pill-menu > summary::-webkit-details-marker { display: none; }
+    details.pill-menu > summary.pill:hover { filter: brightness(1.12); border-style: solid; }
+    details.pill-menu > summary .pill-caret { font-size: 9px; opacity: .7; margin-left: -2px; }
+    details.pill-menu > summary.ticket-add { display: inline-flex; align-items: center; padding: 0 6px; font-size: 11px; line-height: 1.6; }
+    .pill-menu-list { left: 0; right: auto; min-width: 180px; }
+    .pill-menu-list button.active { font-weight: 700; }
     .task-row { display: flex; gap: 8px; align-items: flex-start; }
     .drag-handle {
       flex: 0 0 auto; width: 12px; margin-left: -4px;
@@ -984,6 +993,16 @@
       border-radius: 14px; background: var(--dialog-bg); color: var(--text); padding: 0;
     }
     dialog::backdrop { background: rgba(0,0,0,.5); }
+    /* Pomodoro expiry: a full-screen, must-acknowledge overlay. */
+    dialog.pomodoro-done { width: min(460px, 92vw); border: 2px solid var(--warn); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+    dialog.pomodoro-done::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(2px); }
+    .pomodoro-done-body { padding: 28px 24px 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+    .pomodoro-done-icon { font-size: 56px; line-height: 1; }
+    .pomodoro-done-body h2 { margin: 8px 0 0; font-size: 26px; }
+    .pomodoro-done-body p { margin: 0; font-size: 16px; color: var(--muted); }
+    .pomodoro-done-body .pomodoro-done-time { font-size: 13px; }
+    .pomodoro-done-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+    .pomodoro-done-actions button { width: auto; min-height: 42px; padding: 8px 20px; font-size: 15px; }
     .dialog-body { padding: 18px; display: flex; flex-direction: column; gap: var(--gap-inner); }
     .dialog-body h3 { margin: 0; }
     .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
@@ -1423,6 +1442,19 @@
 
   <div id="toastRoot" role="status" aria-live="polite" aria-atomic="false"></div>
 
+  <dialog id="pomodoroDoneDialog" class="pomodoro-done" aria-labelledby="pomodoroDoneTitle">
+    <div class="pomodoro-done-body">
+      <div class="pomodoro-done-icon" aria-hidden="true">⏰</div>
+      <h2 id="pomodoroDoneTitle">Pomodoro abgelaufen!</h2>
+      <p>Zeit für eine Pause.</p>
+      <p class="pomodoro-done-time" id="pomodoroDoneTime"></p>
+      <div class="pomodoro-done-actions">
+        <button type="button" id="pomodoroRestartBtn" class="ghost">Neue Runde starten</button>
+        <button type="button" id="pomodoroDoneOkBtn" class="primary" autofocus>OK</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="taskPromptDialog">
     <form method="dialog" class="dialog-body">
       <h3 id="promptTitle">Titel</h3>
@@ -1639,8 +1671,34 @@
         savePomodoroState();
         notifyPomodoroDone();
         playPomodoroSound();
-        showToast('Pomodoro-Timer abgelaufen! Zeit für eine Pause.', { variant: 'good', timeoutMs: 8000 });
         renderPomodoro();
+        showPomodoroDoneDialog();
+      }
+
+      // Full-screen, must-acknowledge overlay (replaces the easy-to-miss toast).
+      function showPomodoroDoneDialog() {
+        const dialog = document.getElementById('pomodoroDoneDialog');
+        if (!dialog) {
+          showToast('Pomodoro-Timer abgelaufen! Zeit für eine Pause.', { variant: 'good', timeoutMs: 8000 });
+          return;
+        }
+        const time = document.getElementById('pomodoroDoneTime');
+        if (time) {
+          const d = new Date();
+          time.textContent = `abgelaufen um ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} Uhr`;
+        }
+        if (dialog.open) return;
+        try { dialog.showModal(); } catch (err) { dialog.setAttribute('open', ''); }
+        const ok = document.getElementById('pomodoroDoneOkBtn');
+        if (ok) ok.focus();
+      }
+
+      function wirePomodoroDoneDialog() {
+        const dialog = document.getElementById('pomodoroDoneDialog');
+        if (!dialog) return;
+        const close = () => { if (dialog.open) dialog.close(); };
+        document.getElementById('pomodoroDoneOkBtn').addEventListener('click', close);
+        document.getElementById('pomodoroRestartBtn').addEventListener('click', () => { close(); startPomodoro(); });
       }
 
       function requestPomodoroNotificationPermission() {
@@ -2317,6 +2375,7 @@
 
         dom.pomodoroStartBtn.addEventListener('click', startPomodoro);
         dom.pomodoroStopBtn.addEventListener('click', () => stopPomodoro());
+        wirePomodoroDoneDialog();
         dom.pomodoroDuration.addEventListener('change', () => {
           if (pomodoro.endTs) return;
           pomodoro.minutes = clampNumber(dom.pomodoroDuration.value, 1, 180) || POMODORO_DEFAULT_MINUTES;
@@ -4295,17 +4354,19 @@
         reorderTask(task.id, orderedIds, null);
       }
 
+      // Edit-panel chips: clicking the active chip clears the effort
+      // (effort is optional); any other chip selects it.
       function changeEffort(id, effort) {
         const task = findTask(id);
         if (!task || !EFFORT_KEYS.includes(effort)) return;
-        // Effort is optional, so clicking the active chip clears it.
-        if (task.effort === effort) {
-          task.effort = null;
-          touch(task);
-          saveState();
-          render();
-          return;
-        }
+        setTaskEffort(id, task.effort === effort ? null : effort);
+      }
+
+      // Select semantics (pill picker, edit panel): sets effort to a key or
+      // null. Same key is a no-op. Applies the toolarge/tbd guardrails.
+      function setTaskEffort(id, effort) {
+        const task = findTask(id);
+        if (!task || (effort !== null && !EFFORT_KEYS.includes(effort)) || task.effort === effort) return;
         task.effort = effort;
         // The guardrails still apply retroactively: a planned task can't
         // stay scheduled once it's reclassified as oversized or unframed.
@@ -4736,9 +4797,48 @@
       function taskMeta(task, now) {
         const meta = el('div', { className: 'task-meta' });
         const searching = Boolean(ui.searchQuery);
-        if (task.priority) meta.appendChild(pill(priorityLabel(task.priority), 'prio-' + task.priority));
+        // Woche/Backlog cards: priority and effort pills open a picker.
+        const pickable = task.status === 'planned' || task.status === 'backlog';
+        if (task.priority) {
+          meta.appendChild(pickable
+            ? pillPicker({
+              label: priorityLabel(task.priority),
+              className: 'pill prio-' + task.priority,
+              title: 'Priorität ändern',
+              items: PRIORITIES,
+              activeKey: task.priority,
+              onPick: key => changePriority(task.id, key)
+            })
+            : pill(priorityLabel(task.priority), 'prio-' + task.priority));
+        }
         if (searching && task.status === 'planned' && task.plannedWeek) meta.appendChild(pill(shortWeek(task.plannedWeek)));
-        if (task.effort) meta.appendChild(pill(effortLabel(task.effort), 'effort-' + task.effort));
+        const effortItems = [...EFFORTS, { key: null, label: '— keine Angabe' }];
+        if (task.effort) {
+          meta.appendChild(pickable
+            ? pillPicker({
+              label: effortLabel(task.effort),
+              className: 'pill effort-' + task.effort,
+              title: 'Aufwand ändern',
+              items: effortItems,
+              activeKey: task.effort,
+              onPick: key => setTaskEffort(task.id, key)
+            })
+            : pill(effortLabel(task.effort), 'effort-' + task.effort));
+        }
+        // Hover-only "+ Aufwand" goes last, so its reserved space never
+        // leaves a gap between the visible pills.
+        let addEffort = null;
+        if (!task.effort && pickable) {
+          addEffort = (pillPicker({
+            label: '+ Aufwand',
+            className: 'ticket-add hover-only',
+            title: 'Aufwand festlegen',
+            items: EFFORTS,
+            activeKey: null,
+            onPick: key => setTaskEffort(task.id, key),
+            noCaret: true
+          }));
+        }
         if (task.context) meta.appendChild(pill(task.context));
         if (task.carryCount > 0) meta.appendChild(pill(`${task.carryCount}× verschoben`));
         if (trackingEnabled()) {
@@ -4746,6 +4846,7 @@
           if (tracked) meta.appendChild(pill('⏱ ' + tracked));
         }
         meta.appendChild(el('span', { text: 'erfasst ' + relativeDays(task.createdAt, now) }));
+        if (addEffort) meta.appendChild(addEffort);
         return meta;
       }
 
@@ -4864,20 +4965,47 @@
         menu.appendChild(box);
         menu.addEventListener('toggle', () => {
           if (!menu.open) return;
-          document.querySelectorAll('#task-viewRoot details.card-menu[open]').forEach(d => { if (d !== menu) d.open = false; });
+          document.querySelectorAll(OPEN_POPOVERS).forEach(d => { if (d !== menu) d.open = false; });
         });
         return menu;
       }
 
+      // A pill that opens a small selection list (priority/effort on
+      // Woche/Backlog cards). items: [{ key, label }]; the active key is ✓.
+      function pillPicker({ label, className, title, items, activeKey, onPick, noCaret }) {
+        const menu = el('details', { className: 'pill-menu' });
+        const summary = el('summary', { className, title, text: label });
+        if (!noCaret) summary.appendChild(el('span', { className: 'pill-caret', text: '▾', attrs: { 'aria-hidden': 'true' } }));
+        menu.appendChild(summary);
+        const box = el('div', { className: 'card-menu-list pill-menu-list', attrs: { role: 'menu' } });
+        items.forEach(item => {
+          const isActive = item.key === activeKey;
+          const b = button((isActive ? '✓ ' : '') + item.label, {
+            className: isActive ? 'active' : '',
+            attrs: { role: 'menuitemradio', 'aria-checked': isActive ? 'true' : 'false' },
+            onClick: () => { menu.open = false; if (!isActive) onPick(item.key); }
+          });
+          box.appendChild(b);
+        });
+        menu.appendChild(box);
+        menu.addEventListener('toggle', () => {
+          if (!menu.open) return;
+          document.querySelectorAll(OPEN_POPOVERS).forEach(d => { if (d !== menu) d.open = false; });
+        });
+        return menu;
+      }
+
+      const OPEN_POPOVERS = '#task-viewRoot details.card-menu[open], #task-viewRoot details.pill-menu[open]';
+
       function closeCardMenus(except) {
-        document.querySelectorAll('#task-viewRoot details.card-menu[open]').forEach(d => {
+        document.querySelectorAll(OPEN_POPOVERS).forEach(d => {
           if (!except || !d.contains(except)) d.open = false;
         });
       }
 
       document.addEventListener('click', ev => closeCardMenus(ev.target));
       document.addEventListener('keydown', ev => {
-        if (ev.key === 'Escape' && document.querySelector('#task-viewRoot details.card-menu[open]')) closeCardMenus(null);
+        if (ev.key === 'Escape' && document.querySelector(OPEN_POPOVERS)) closeCardMenus(null);
       });
 
       function detailsToggleItem(task) {
@@ -5097,13 +5225,12 @@
         return box;
       }
 
-      function renderInboxCard(task, now, opts = {}) {
+      function renderInboxCard(task, now) {
         const { card, body, hover } = taskCardShell(task, now, {
           check: { onClick: () => completeTask(task.id), title: 'Sofort erledigt' }
         });
         const menu = cardMenu([contextItem(task), { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }]);
         if (menu) hover.appendChild(menu);
-        if (opts.compact) return card;
         const triage = el('div', { className: 'triage' });
         triage.appendChild(chipRow('Priorität', PRIORITIES, task.priority, k => setPriority(task.id, k), 'prio'));
         triage.appendChild(chipRow('Aufwand (optional)', EFFORTS, task.effort, k => setEffort(task.id, k), 'effort'));
@@ -5618,7 +5745,7 @@
       }
 
       const SEARCH_GROUPS = [
-        { label: 'Posteingang', match: t => t.status === 'inbox', card: (t, now) => renderInboxCard(t, now, { compact: true }) },
+        { label: 'Posteingang', match: t => t.status === 'inbox', card: renderInboxCard },
         { label: 'Geplant', match: t => t.status === 'planned', card: (t, now) => renderPlannedCard(t, now, { draggable: false }) },
         { label: 'Backlog', match: t => t.status === 'backlog', card: renderBacklogCard },
         { label: 'Archiv', match: t => isTerminal(t.status), card: renderArchiveCard }
