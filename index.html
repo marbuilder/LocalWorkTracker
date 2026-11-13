@@ -746,21 +746,43 @@
     .task-check.static.state-done { color: var(--good); }
     .task-check.static.state-escalated { color: var(--accent); }
     .task-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .task-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-    .task-title-wrap { display: inline-flex; gap: 2px; align-items: baseline; min-width: 0; flex: 1 1 200px; }
-    .task-title { font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+    /* Title line flows as inline text, so a ticket prefix wraps together
+       with the title instead of breaking onto its own row. */
+    .task-line { display: block; line-height: 1.35; overflow-wrap: anywhere; }
+    .task-title-wrap { display: inline; }
+    .task-title { font-weight: 600; }
+    /* Ticket = a quiet prefix: accent-coloured monospace, no box, then a
+       "·" separator. The ⧉ copy button sits exactly on the separator and
+       replaces it on hover/focus — nothing in the line shifts. */
     .ticket-chip {
-      display: inline-flex; gap: 2px; align-items: center; flex: 0 0 auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
-      background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-      padding: 0 2px 0 6px; line-height: 1.6;
+      position: relative; display: inline-block; padding-right: 20px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px; font-weight: 600; color: var(--accent); white-space: nowrap;
     }
-    .ticket-text { color: var(--text); }
+    .ticket-chip::after {
+      content: '·'; position: absolute; right: 0; width: 20px; text-align: center;
+      color: var(--muted); font-weight: 700;
+    }
+    .ticket-chip button.copy-btn {
+      position: absolute; right: 1px; top: 50%; transform: translateY(-50%);
+      width: 18px; padding: 0; justify-content: center;
+    }
+    .task-card:hover .ticket-chip::after, .task-card:focus-within .ticket-chip::after { visibility: hidden; }
+    @media (hover: none) { .ticket-chip::after { visibility: hidden; } }
     button.ticket-add {
-      width: auto; min-height: 0; padding: 0 6px; font-size: 11px; line-height: 1.6;
+      width: auto; min-height: 0; padding: 0 6px; font-size: 11px; line-height: 1.5;
       background: transparent; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px;
+      vertical-align: middle;
     }
-    .task-title-wrap .ticket-add { margin-left: 6px; align-self: center; }
+    .task-title-wrap .ticket-add { margin-left: 6px; }
+    .task-line > .ticket-add { margin-right: 6px; }
+    /* Hidden items at the end of the title line take no width at all, so
+       they can never wrap onto an empty extra line; they only appear on
+       hover/focus, where nothing after them can shift. */
+    .task-title-wrap button.copy-btn, .task-title-wrap .ticket-add { display: none; }
+    .task-card:hover .task-title-wrap button.copy-btn, .task-card:focus-within .task-title-wrap button.copy-btn,
+    .task-card:hover .task-title-wrap .ticket-add, .task-card:focus-within .task-title-wrap .ticket-add { display: inline-flex; }
+    @media (hover: none) { .task-title-wrap button.copy-btn, .task-title-wrap .ticket-add { display: inline-flex; } }
     .editable { cursor: text; border-radius: 4px; }
     .editable:hover { background: rgba(127,127,127,.12); }
     .editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -775,9 +797,11 @@
     }
     .task-notes-slot.empty-slot { display: none; }
     input.inline-edit {
-      width: auto; flex: 1 1 260px; min-height: 0; padding: 2px 6px; font-size: 14px; font-weight: 600;
+      width: min(100%, 520px); min-height: 0; padding: 2px 6px; font-size: 14px; font-weight: 600;
+      vertical-align: baseline;
     }
-    input.inline-edit.ticket-edit { flex: 0 0 9rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 400; }
+    input.inline-edit.ticket-edit { width: 9rem; margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 400; }
+    .ticket-chip input.inline-edit.ticket-edit { margin-right: 0; }
     textarea.task-notes-edit {
       width: 100%; min-height: 160px; max-height: 70vh; resize: vertical;
       font-size: 13px; line-height: 1.45; padding: 6px 8px;
