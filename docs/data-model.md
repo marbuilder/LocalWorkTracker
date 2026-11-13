@@ -17,11 +17,11 @@ Vollständige Feldreferenz und die `window.LWT`-Schnittstelle stehen in [`CLAUDE
 ## Status-Übergänge (Aufgaben)
 
 ```
-inbox ──(Priorität + Aufwand setzen)──▶ [Guardrail]
+inbox ──(Priorität setzen; Aufwand optional)──▶ [Guardrail]
   ├─ Aufwand "quick"     → Sofort erledigt (done)  ODER  trotzdem planen
   ├─ Aufwand "toolarge"  → escalated (Story-Key) ODER verworfen (dropped)
   ├─ Aufwand "tbd"       → backlog (kein Planen möglich, bis Rahmen klar ist)
-  └─ sonst               → planned (Kalenderwoche) ODER backlog
+  └─ sonst / kein Aufwand → planned (Kalenderwoche) ODER backlog
 
 planned ──▶ done | dropped | verschoben (carryCount++) | zurück ins backlog
 backlog ──▶ planned | dropped
@@ -29,7 +29,9 @@ backlog ──▶ planned | dropped
 
 Eine geplante Aufgabe, die nachträglich auf Aufwand `toolarge` oder `tbd` umklassifiziert wird (`changeEffort`), fällt automatisch zurück ins Backlog — beide Guardrails gelten rückwirkend, siehe `docs/architecture.md`'s Feature→Funktion-Tabelle.
 
-`done`, `dropped`, `escalated` sind terminal und landen im Archiv, gruppiert nach Kalenderwoche.
+`done`, `dropped`, `escalated` sind terminal und landen im Archiv, gruppiert nach Kalenderwoche. 30 Tage nach `doneAt` werden sie beim Start (und nach einem Import) automatisch gelöscht (`purgeOldArchive`); ältere Stände bleiben nur in Backups erhalten.
+
+`externalRef` ist das allgemeine, optionale **Ticket**-Feld jeder Aufgabe (vor dem Titel angezeigt, per Klick bearbeit- und per ⧉ kopierbar), nicht mehr nur der Story-Key nach einer Eskalation. Bei der Erfassung wird „ABC-123: Titel" automatisch in Ticket und Titel aufgeteilt (`splitTicketPrefix`), sofern kein Ticket explizit angegeben wurde. Notizen behalten Zeilenumbrüche (`sanitizeMultiline`).
 
 ## Zeiteinträge und die `taskId`-Verknüpfung
 

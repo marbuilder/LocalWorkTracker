@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T22 task ticket capture</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T22 Task Ticket Capture</h1>
+  <p>Pins the ticket field on capture: <code>splitTicketPrefix</code> splits <code>"ABC-123: Titel"</code> only when the prefix looks like a ticket key, <code>captureTask(title, {ticket, notes})</code> prefers an explicit ticket, keeps note line breaks (<code>sanitizeMultiline</code>) and still accepts the legacy single-title call. Logic is duplicated inline from <code>index.html</code>'s TaskModule, per project convention.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      // ── Mirrors index.html TaskModule ──
+      const MAX_TITLE = 120, MAX_NOTES = 2000, MAX_EXTERNAL_REF = 60;
+      function sanitizeText(value, maxLen) {
+        return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+      function sanitizeMultiline(value, maxLen) {
+        return String(value == null ? '' : value)
+          .replace(/\r\n?/g, '\n')
+          .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, ' ')
+          .trim()
+          .slice(0, maxLen);
+      }
+      function splitTicketPrefix(text) {
+        const raw = String(text == null ? '' : text);
+        const idx = raw.indexOf(':');
+        if (idx > 0) {
+          const head = raw.slice(0, idx).trim();
+          const rest = raw.slice(idx + 1).trim();
+          if (rest && /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(head)) return { ticket: head, title: rest };
+        }
+        return { ticket: '', title: raw };
+      }
+      function captureTask(title, extra = {}) {
+        let ticket = sanitizeText(extra && extra.ticket, MAX_EXTERNAL_REF);
+        let rawTitle = title;
+        if (!ticket) {
+          const split = splitTicketPrefix(title);
+          ticket = sanitizeText(split.ticket, MAX_EXTERNAL_REF);
+          rawTitle = split.title;
+        }
+        const clean = sanitizeText(rawTitle, MAX_TITLE);
+        if (!clean) return null;
+        return { title: clean, externalRef: ticket, notes: sanitizeMultiline(extra && extra.notes, MAX_NOTES), status: 'inbox' };
+      }
+
+      const a = captureTask('ABC-123: Renovate-PRs aufräumen');
+      assert('"ABC-123: Titel" is split into ticket and title', a.externalRef === 'ABC-123' && a.title === 'Renovate-PRs aufräumen', a);
+      const b = captureTask('Meeting: Planung');
+      assert('a non-ticket prefix is not split', b.externalRef === '' && b.title === 'Meeting: Planung', b);
+      const c = captureTask('ABC-1:', {});
+      assert('a ticket prefix with nothing after it stays the title', c.externalRef === '' && c.title === 'ABC-1:', c);
+      const d = captureTask('XY-9: Etwas', { ticket: 'T-1' });
+      assert('an explicit ticket wins; the title is then kept verbatim', d.externalRef === 'T-1' && d.title === 'XY-9: Etwas', d);
+      const e = captureTask('Titel', { notes: 'Zeile 1\r\nZeile 2\tTab\u0000x' });
+      assert('notes keep line breaks and tabs, other control characters are replaced', e.notes === 'Zeile 1\nZeile 2\tTab x', e);
+      const f = captureTask('Nur Titel');
+      assert('legacy single-argument call still works', f && f.title === 'Nur Titel' && f.externalRef === '' && f.notes === '', f);
+      assert('empty title is rejected even with a ticket', captureTask('  ', { ticket: 'T-2' }) === null && captureTask('\u0000') === null);
+      const g = captureTask('Titel', { ticket: 'K'.repeat(80) });
+      assert('ticket is truncated to MAX_EXTERNAL_REF', g.externalRef.length === MAX_EXTERNAL_REF, g.externalRef.length);
+
+      const tbody = document.getElementById('results');
+      let passCount = 0;
+      results.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = r.name;
+        const tdResult = document.createElement('td');
+        tdResult.textContent = r.pass ? 'PASS' : 'FAIL';
+        tdResult.className = r.pass ? 'pass' : 'fail';
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = r.details;
+        tr.append(tdName, tdResult, tdDetails);
+        tbody.appendChild(tr);
+        if (r.pass) passCount++;
+      });
+      document.getElementById('status').textContent =
+        `${passCount}/${results.length} checks passed.`;
+    })();
+  </script>
+</body>
+</html>

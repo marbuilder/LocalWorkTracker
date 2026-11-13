@@ -72,7 +72,7 @@
         const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
-        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && !priority) status = 'inbox';
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
         const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
@@ -118,7 +118,9 @@
 
       function changeEffort(id, effort) {
         const task = findTask(id);
-        if (!task || !EFFORT_KEYS.includes(effort) || task.effort === effort) return;
+        if (!task || !EFFORT_KEYS.includes(effort)) return;
+        // Effort is optional, so clicking the active chip clears it.
+        if (task.effort === effort) { task.effort = null; touch(task); return; }
         task.effort = effort;
         if (task.status === 'planned' && effort === 'toolarge') {
           task.status = 'backlog';
@@ -195,8 +197,8 @@
           JSON.stringify(backlogTask));
 
         changeEffort(backlogTask.id, 'small'); // already active
-        assert('re-selecting the active effort is a no-op',
-          backlogTask.effort === 'small' && backlogTask.status === 'backlog',
+        assert('re-selecting the active effort clears it (effort is optional) without forcing inbox',
+          backlogTask.effort === null && backlogTask.status === 'backlog',
           JSON.stringify(backlogTask));
 
         changeEffort(backlogTask.id, 'medium');

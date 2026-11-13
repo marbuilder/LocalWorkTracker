@@ -58,7 +58,7 @@
 
       // Mirrors planTask()'s guardrail in index.html's TaskModule.
       function planTask(task, weekKey) {
-        if (!task || !task.priority || !task.effort) return false;
+        if (!task || !task.priority) return false;
         if (task.effort === 'toolarge' || task.effort === 'tbd') return false;
         task.status = 'planned';
         task.plannedWeek = weekKey;

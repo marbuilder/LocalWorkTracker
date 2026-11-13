@@ -64,7 +64,7 @@
         const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
-        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && !priority) status = 'inbox';
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
         const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
@@ -103,7 +103,7 @@
       // ── Reducers under test, copied from index.html ──────────
       function planTask(id, weekKey) {
         const task = findTask(id);
-        if (!task || !task.priority || !task.effort) return;
+        if (!task || !task.priority) return;
         if (!parseIsoWeekKey(weekKey)) return;
         if (task.effort === 'toolarge') return; // guardrail
         task.status = 'planned';
@@ -226,6 +226,16 @@
         assert('dropping is always available and is terminal',
           grew.status === 'dropped' && grew.doneAt > 0 && grew.plannedWeek === null,
           JSON.stringify(grew));
+
+        // ── Effort is optional ───────────────────────────────
+        const unsized = makeTask('eighty', null);
+        assert('a task without effort gets the default guard (plan, backlog, complete)',
+          JSON.stringify(guardActionsFor(null)) === JSON.stringify(['plan', 'backlog', 'complete']),
+          JSON.stringify(guardActionsFor(null)));
+        planTask(unsized.id, WEEK);
+        assert('a task with a priority but no effort can be planned',
+          unsized.status === 'planned' && unsized.plannedWeek === WEEK && unsized.effort === null,
+          JSON.stringify(unsized));
 
         assert('story keys are truncated to the documented maximum',
           (() => { const t = makeTask('nice', 'toolarge'); escalateTask(t.id, 'K'.repeat(MAX_EXTERNAL_REF + 20)); return t.externalRef.length === MAX_EXTERNAL_REF; })(),

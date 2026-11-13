@@ -16,7 +16,7 @@
 </head>
 <body>
   <h1>T00 Capture and Triage</h1>
-  <p>Pins the capture and triage contract: quick capture creates an inbox task with no priority and no effort, triage sets both, and no task can leave the inbox until both are present. Clearing either one pushes an assessed task back into the inbox.</p>
+  <p>Pins the capture and triage contract: quick capture creates an inbox task with no priority and no effort, triage sets both, and no task can leave the inbox without a priority (effort is optional). Clearing the priority pushes an assessed task back into the inbox; clearing the effort does not.</p>
 
   <div id="status">Running checks…</div>
   <table>
@@ -64,7 +64,7 @@
         const effort = EFFORT_KEYS.includes(t.effort) ? t.effort : null;
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
-        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && !priority) status = 'inbox';
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
         const createdAt = Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : 0;
@@ -116,13 +116,12 @@
         const task = findTask(id);
         if (!task || !EFFORT_KEYS.includes(effort)) return;
         task.effort = task.effort === effort ? null : effort;
-        if (!task.effort && task.status !== 'inbox') task.status = 'inbox';
         task.updatedAt = now();
       }
 
       function moveToBacklog(id) {
         const task = findTask(id);
-        if (!task || !task.priority || !task.effort) return;
+        if (!task || !task.priority) return;
         task.status = 'backlog';
         task.plannedWeek = null;
         task.todayFlag = false;
@@ -164,31 +163,36 @@
 
         const id = captured.id;
         moveToBacklog(id);
-        assert('a task cannot leave the inbox without priority and effort',
+        assert('a task cannot leave the inbox without a priority',
           findTask(id).status === 'inbox',
           JSON.stringify(findTask(id)));
 
         setPriority(id, 'eighty');
         moveToBacklog(id);
-        assert('priority alone is not enough to leave the inbox',
-          findTask(id).priority === 'eighty' && findTask(id).status === 'inbox',
+        assert('priority alone is enough to leave the inbox (effort is optional)',
+          findTask(id).priority === 'eighty' && findTask(id).effort === null && findTask(id).status === 'backlog',
           JSON.stringify(findTask(id)));
 
         setEffort(id, 'small');
         moveToBacklog(id);
-        assert('with both set the task moves to the backlog',
+        assert('with both set the task stays in the backlog',
           findTask(id).status === 'backlog' && findTask(id).effort === 'small' &&
           findTask(id).plannedWeek === null && findTask(id).todayFlag === false,
           JSON.stringify(findTask(id)));
 
         setEffort(id, 'small'); // clicking the active chip again clears it
-        assert('clearing the effort pushes an assessed task back to the inbox',
-          findTask(id).effort === null && findTask(id).status === 'inbox',
+        assert('clearing the effort keeps an assessed task where it is',
+          findTask(id).effort === null && findTask(id).status === 'backlog',
           JSON.stringify(findTask(id)));
 
         setEffort(id, 'medium');
         moveToBacklog(id);
         setPriority(id, 'eighty'); // toggling the active priority off
+        assert('normalizeTask keeps a backlog task without effort',
+          normalizeTask({ id: 'n1', title: 'x', priority: 'nice', effort: null, status: 'backlog' }).status === 'backlog' &&
+          normalizeTask({ id: 'n2', title: 'x', priority: null, effort: 'small', status: 'backlog' }).status === 'inbox',
+          'priority is the only requirement');
+
         assert('clearing the priority pushes an assessed task back to the inbox',
           findTask(id).priority === null && findTask(id).status === 'inbox',
           JSON.stringify(findTask(id)));

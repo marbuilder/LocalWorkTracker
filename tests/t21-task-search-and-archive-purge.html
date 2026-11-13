@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T21 task search and archive purge</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T21 Task Search &amp; Archive Purge</h1>
+  <p>Pins the live task search (<code>matchesSearch</code>: case-insensitive, every term must match, over title, notes, context and ticket, archive included) and the 30-day archive retention (<code>purgeOldArchive</code>: terminal tasks whose <code>doneAt</code> is older than 30 days are removed, open tasks never). Logic is duplicated inline from <code>index.html</code>'s TaskModule, per project convention.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      // ── Mirrors index.html TaskModule ──
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const ARCHIVE_RETENTION_DAYS = 30;
+      const TERMINAL = ['done', 'dropped', 'escalated'];
+      const isTerminal = s => TERMINAL.includes(s);
+
+      function matchesSearch(task, query) {
+        const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.length) return false;
+        const hay = [task.title, task.notes, task.context, task.externalRef].join('\n').toLowerCase();
+        return terms.every(term => hay.includes(term));
+      }
+
+      let state = { tasks: [] };
+      function purgeOldArchive(now) {
+        const cutoff = (now || Date.now()) - ARCHIVE_RETENTION_DAYS * DAY_MS;
+        const before = state.tasks.length;
+        state.tasks = state.tasks.filter(t => !(isTerminal(t.status) && t.doneAt && t.doneAt < cutoff));
+        return before - state.tasks.length;
+      }
+
+      // ── Search ──
+      const task = { title: 'Renovate-PRs aufräumen', notes: 'Bot-Config prüfen\nGruppierung', context: 'CI', externalRef: 'ABC-123', status: 'done' };
+      assert('matches the title case-insensitively', matchesSearch(task, 'renovate'));
+      assert('matches notes, also across lines', matchesSearch(task, 'gruppierung'));
+      assert('matches context and ticket', matchesSearch(task, 'ci') && matchesSearch(task, 'abc-123'));
+      assert('all terms must match (AND)', matchesSearch(task, 'abc renovate') && !matchesSearch(task, 'renovate helm'));
+      assert('terms may come from different fields', matchesSearch(task, 'bot ABC'));
+      assert('empty or whitespace query matches nothing', !matchesSearch(task, '') && !matchesSearch(task, '   '));
+      assert('archived (terminal) tasks are searchable like any other', isTerminal(task.status) && matchesSearch(task, 'renovate'));
+
+      // ── Archive purge ──
+      const now = Date.UTC(2026, 10, 13, 12);
+      state.tasks = [
+        { id: 'done29', status: 'done', doneAt: now - 29 * DAY_MS },
+        { id: 'done31', status: 'done', doneAt: now - 31 * DAY_MS },
+        { id: 'drop31', status: 'dropped', doneAt: now - 31 * DAY_MS },
+        { id: 'esc40', status: 'escalated', doneAt: now - 40 * DAY_MS },
+        { id: 'plan', status: 'planned', doneAt: null, createdAt: now - 400 * DAY_MS },
+        { id: 'back', status: 'backlog', doneAt: null },
+        { id: 'inbox', status: 'inbox', doneAt: null }
+      ];
+      const removed = purgeOldArchive(now);
+      const ids = state.tasks.map(t => t.id);
+      assert('removes terminal tasks older than 30 days, all three statuses', removed === 3 && !ids.includes('done31') && !ids.includes('drop31') && !ids.includes('esc40'), ids);
+      assert('keeps archived tasks younger than 30 days', ids.includes('done29'), ids);
+      assert('never removes open tasks, however old', ['plan', 'back', 'inbox'].every(id => ids.includes(id)), ids);
+      assert('a second run is a no-op', purgeOldArchive(now) === 0, state.tasks.length);
+
+      const tbody = document.getElementById('results');
+      let passCount = 0;
+      results.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = r.name;
+        const tdResult = document.createElement('td');
+        tdResult.textContent = r.pass ? 'PASS' : 'FAIL';
+        tdResult.className = r.pass ? 'pass' : 'fail';
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = r.details;
+        tr.append(tdName, tdResult, tdDetails);
+        tbody.appendChild(tr);
+        if (r.pass) passCount++;
+      });
+      document.getElementById('status').textContent =
+        `${passCount}/${results.length} checks passed.`;
+    })();
+  </script>
+</body>
+</html>
