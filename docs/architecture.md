@@ -25,16 +25,19 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 
 | Feature | Key functions | Module |
 |---|---|---|
-| Posteingang (inbox capture) | `renderInboxView`, `captureTask`, `inboxTasks` | TaskModule |
-| Globale Schnellerfassung (Sticky-Bar, sichtbar auf jedem Tab) | `doQuickCapture` (AppShell) calling `LWT.tasks.captureTask(title)` (thin wrapper around the private `captureTask`, then `render()`) | AppShell + TaskModule |
-| Triage (priority/effort) | `changePriority`, `changeEffort`, `chipRow` | TaskModule |
+| Posteingang (inbox capture: `#captureTicket` + `#captureInput` + optional „+ Notiz" `#captureNotes`, open state in `ui.captureNotesOpen`) | `renderInboxView`, `captureTask(title, { ticket, notes })`, `splitTicketPrefix` ("ABC-123: Titel" → ticket + title, only when the prefix looks like a ticket key and no explicit ticket was given), `sanitizeMultiline`, `inboxTasks` | TaskModule |
+| Globale Schnellerfassung (Sticky-Bar, sichtbar auf jedem Tab) | `doQuickCapture` (AppShell) calling `LWT.tasks.captureTask(title)` (thin wrapper around the private `captureTask`, then `render()`; the ticket-prefix split happens inside `captureTask`) | AppShell + TaskModule |
+| Triage (priority; effort is optional) | `setPriority`/`setEffort` (inbox chips, toggle), `changePriority`/`changeEffort` (edit panel; re-clicking the active effort chip clears it), `chipRow`, `renderEditPanel` (opened from the card's ⋯ menu via `detailsToggleItem`) | TaskModule |
+| Task card (compact two-line layout: ⠿ drag handle, round „Erledigt" check, ticket chip, title, meta, 2-line-clamped notes; actions in `.task-hover`, revealed on hover/focus, always shown under `(hover: none)`) | `taskCardShell` (returns `{ card, body, hover }`), `renderInboxCard`/`renderPlannedCard`/`renderBacklogCard`/`renderLeftoverCard`/`renderArchiveCard` (append their actions to `hover`), `cardMenu` (native `<details class="card-menu">` ⋯ menu; one document-level click/Esc listener closes open menus), `detailsToggleItem`, `contextItem`, `addNoteItem` | TaskModule |
+| Inline editing + copy of ticket, title, notes (click the text; Enter / Ctrl+Enter / blur saves, Esc cancels; ⧉ copies) | `editableText`, `startInlineEdit`, `saveTaskField`, `copyText`, `copyButton`, `INLINE_FIELDS` | TaskModule |
+| Live search (`#taskSearch` in `.task-toolbar`, outside the re-rendered `#task-tabbar`/`#task-viewRoot` so it keeps focus; while non-empty it replaces the active view) | `matchesSearch` (case-insensitive, all terms over title/notes/context/ticket, archive included), `renderSearchView`, `SEARCH_GROUPS`, `clearSearch`, `ui.searchQuery` | TaskModule |
 | Woche (weekly planning) | `renderWeekView`, `plannedTasks`, `leftoverTasks`, `renderGroups`, `groupByPriority` | TaskModule |
 | Heute im Fokus (inline highlight within Woche/Geplant, plus a priority-sorted duplicate panel above the weekly groups for the current week) | `toggleToday`, `focusTasks` (priority-sorted source for both), `renderWeekView` (renders the dedicated panel via `renderGroups`/`renderPlannedCard` with `{ draggable: false }`, current week only), `renderPlannedCard` (highlight driven by `task.todayFlag` directly, not an opts flag; `draggable` opts flag disables drag&drop for the duplicate panel; the compact ▶ Timer-starten icon button shows on every planned card regardless of `todayFlag`) | TaskModule |
 | Manual drag&drop priorisation (Woche/Geplant only, incl. today-flagged tasks) | `reorderTask`, `reorderPeers`, `moveTaskStep`, `attachReorder`, `getDragAfterElement` | TaskModule |
 | Backlog | `renderBacklogView`, `backlogTasks`, `renderBacklogCard`, `isStale` | TaskModule |
-| Archiv | `renderArchiveView`, `archivedTasks`, `renderArchiveCard` | TaskModule |
+| Archiv (auto-deleted `ARCHIVE_RETENTION_DAYS` = 30 days after `doneAt`, on startup and after import) | `renderArchiveView`, `archivedTasks`, `renderArchiveCard`, `purgeOldArchive`, `notifyPurge` | TaskModule |
 | Escalation guardrail | `escalateTask`, `changeEffort` ('toolarge' branch) | TaskModule |
-| "Rahmen unklar" (`tbd`) guardrail — unframed work is routed to the backlog, not planned | `guardFooter` ('tbd' branch), `planTask` (blocks 'tbd' like 'toolarge'), `changeEffort` ('tbd' branch, same retroactive backlog-bounce as 'toolarge'), `renderBacklogCard` (omits the dead "In `<Woche>`" button for 'tbd') | TaskModule |
+| "Rahmen unklar" (`tbd`) guardrail — unframed work is routed to the backlog, not planned | `guardFooter` ('tbd' branch), `planTask` (blocks 'tbd' like 'toolarge'), `changeEffort` ('tbd' branch, same retroactive backlog-bounce as 'toolarge'), `renderBacklogCard` (omits the dead "→ `<Woche>`" button for 'tbd') | TaskModule |
 | Daily backup | `isBackupDue`, `runBackup`, `getBackupStatus`, `buildBackupPayload` | TaskModule |
 | Timer start/stop | `startTimer`, `internalStopTimer`, `autoStopActiveTimerIfDayEnded` | TimeModule |
 | Manual entries (add/edit), incl. optional "Dauer" input (e.g. `2h`) as an alternative to Start/Ende — Start defaults to `00:00` of the chosen date when left empty | `addManualEntry`, `saveEditEntry`, `openEditDialog`, `parseDurationHoursToMinutes` | TimeModule |
@@ -71,7 +74,7 @@ window.LWT = {
     importPayload(parsed), clearAllData(),
     isBackupDue(), daysSinceLastBackup(), setBackupInterval(days), getBackupStatus(), runBackup(manual),
     getTaskCount(),
-    captureTask(title),                             // creates an inbox task + re-renders TaskModule's own view; used by AppShell's global quick-capture widget in the sticky bar
+    captureTask(title, extra?),                     // creates an inbox task + re-renders TaskModule's own view; extra = { ticket, notes }, both optional; without an explicit ticket an "ABC-123: Titel" prefix is split off. Used by AppShell's global quick-capture widget in the sticky bar (title only)
     refreshView()                                   // re-runs TaskModule's own render() — used by AppShell after the Zeittracking toggle changes, so the timer pill/▶ button on task cards updates immediately
   },
   shell: {
@@ -123,7 +126,7 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
     <nav id="mainTabbar">                      -- 3 buttons, data-main-tab="time"|"tasks"|"daten" (AppShell-owned); the "time" button is `hidden` by `applyTimeTrackingVisibility()` when the Zeittracking feature toggle is off
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
-      <section id="tabPanelTasks" hidden>      -- #task-tabbar + #task-viewRoot (TaskModule's own inner router, unchanged)
+      <section id="tabPanelTasks" hidden>      -- .task-toolbar (#task-tabbar + static #taskSearch live-search input) + #task-viewRoot (TaskModule's own inner router)
       <section id="tabPanelDaten" hidden>      -- Einstellungen tab (button label "⚙️ Einstellungen", `data-main-tab="daten"` kept internally): "Funktionen" panel with `#timeTrackingToggle` (AppShell-owned, the Zeittracking feature toggle) + backup/export/import/clear (AppShell-owned) + relocated Snapshots/Ticket-Presets <details> (TimeModule-owned content, AppShell-owned tab panel) — the one place a tab panel's content isn't wholly owned by the module its name matches
     <footer class="app-footer">                -- static GitHub Pages / localStorage-only privacy note (AppShell-owned, no JS)
   </div>

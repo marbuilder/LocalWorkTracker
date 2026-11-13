@@ -73,7 +73,7 @@
         let status = STATUS_KEYS.includes(t.status) ? t.status : 'inbox';
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
 
-        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && !priority) status = 'inbox';
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
 

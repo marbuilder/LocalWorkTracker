@@ -705,34 +705,148 @@
     }
 
     /* ── Task cards ────────────────────────────────────────────── */
-    .task-list { display: flex; flex-direction: column; gap: var(--gap-inner); }
+    /* Compact two-line cards: [handle][check] ticket · title / meta / notes,
+       with the actions (.task-hover) revealed on hover or keyboard focus. */
+    .task-list { display: flex; flex-direction: column; gap: 6px; }
     .task-card {
+      position: relative;
       background: var(--panel-2);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px 14px;
-      display: flex; flex-direction: column; gap: 8px;
+      border-left: 3px solid var(--border);
+      border-radius: 10px;
+      padding: 6px 10px 6px 8px;
+      display: flex; flex-direction: column; gap: 6px;
     }
+    .task-card.prio-zero { border-left-color: var(--bad); }
+    .task-card.prio-eighty { border-left-color: var(--warn); }
+    .task-card.prio-nice { border-left-color: var(--muted); }
     .task-card.focus { border-color: var(--current-border); background: var(--current-bg); }
-    .task-card[draggable="true"] { cursor: grab; }
-    .task-card.dragging { opacity: .4; cursor: grabbing; }
-    .task-main { display: flex; gap: var(--gap-inner); align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
-    .task-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
-    .task-title { font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-    .task-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
-    .task-notes { font-size: 13px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
-    .task-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
-    .task-actions button { width: auto; min-height: 34px; padding: 6px 10px; font-size: 13px; }
-    .star-btn {
-      width: auto; min-height: 34px; padding: 6px 10px; font-size: 15px; line-height: 1;
-      border-radius: 999px; background: transparent; border-color: var(--border); color: var(--muted);
+    .task-card.focus.prio-zero { border-left-color: var(--bad); }
+    .task-card.focus.prio-eighty { border-left-color: var(--warn); }
+    .task-card.focus.prio-nice { border-left-color: var(--muted); }
+    .task-card.dragging { opacity: .4; }
+    .task-card:has(details.card-menu[open]) { z-index: 20; }
+    .task-row { display: flex; gap: 8px; align-items: flex-start; }
+    .drag-handle {
+      flex: 0 0 auto; width: 12px; margin-left: -4px; padding-top: 3px;
+      color: var(--muted); font-size: 14px; line-height: 1; cursor: grab; user-select: none;
+      visibility: hidden;
     }
+    .drag-handle:active { cursor: grabbing; }
+    button.task-check {
+      flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; padding: 0; margin-top: 2px;
+      border-radius: 50%; border: 2px solid var(--muted); background: transparent;
+    }
+    button.task-check:hover { border-color: var(--good); background: rgba(48,196,141,.2); }
+    .task-check.static {
+      flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--muted);
+    }
+    .task-check.static.state-done { color: var(--good); }
+    .task-check.static.state-escalated { color: var(--accent); }
+    .task-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .task-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+    .task-title-wrap { display: inline-flex; gap: 2px; align-items: baseline; min-width: 0; flex: 1 1 200px; }
+    .task-title { font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+    .ticket-chip {
+      display: inline-flex; gap: 2px; align-items: center; flex: 0 0 auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+      padding: 0 2px 0 6px; line-height: 1.6;
+    }
+    .ticket-text { color: var(--text); }
+    button.ticket-add {
+      width: auto; min-height: 0; padding: 0 6px; font-size: 11px; line-height: 1.6;
+      background: transparent; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px;
+    }
+    .task-title-wrap .ticket-add { margin-left: 6px; align-self: center; }
+    .editable { cursor: text; border-radius: 4px; }
+    .editable:hover { background: rgba(127,127,127,.12); }
+    .editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .task-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+    .task-meta .pill { padding: 0 7px; font-size: 11px; line-height: 1.6; }
+    .task-meta .purge-soon { color: var(--warn); }
+    .task-notes-wrap { display: flex; gap: 2px; align-items: flex-start; }
+    .task-notes {
+      flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45;
+      overflow-wrap: anywhere; white-space: pre-wrap;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+    }
+    .task-notes-slot.empty-slot { display: none; }
+    input.inline-edit {
+      width: auto; flex: 1 1 260px; min-height: 0; padding: 2px 6px; font-size: 14px; font-weight: 600;
+    }
+    input.inline-edit.ticket-edit { flex: 0 0 9rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 400; }
+    textarea.task-notes-edit {
+      width: 100%; min-height: 160px; max-height: 70vh; resize: vertical;
+      font-size: 13px; line-height: 1.45; padding: 6px 8px;
+    }
+    /* Icon buttons (copy, star, timer, archive actions) */
+    button.icon-btn {
+      width: auto; min-height: 26px; height: 26px; padding: 0 7px; font-size: 13px; line-height: 1;
+      border-radius: 7px;
+    }
+    button.copy-btn {
+      min-height: 20px; height: 20px; padding: 0 4px; font-size: 12px;
+      background: transparent; border-color: transparent; color: var(--muted);
+      visibility: hidden;
+    }
+    button.copy-btn:hover { color: var(--text); border-color: var(--border); }
+    button.small-btn { width: auto; min-height: 26px; height: 26px; padding: 0 10px; font-size: 12px; }
+    .star-btn { border-radius: 999px; background: transparent; border-color: var(--border); color: var(--muted); }
     .star-btn.on { color: var(--warn); border-color: var(--warn); }
-    .reorder-btn {
-      width: auto; min-height: 34px; padding: 6px 8px; font-size: 12px; line-height: 1;
+    /* Hover reveal: visibility (not display/opacity) so a starred task's ★
+       can stay visible on its own and the layout doesn't jump. */
+    .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; visibility: hidden; }
+    .hover-only { visibility: hidden; }
+    .task-hover .star-btn.on { visibility: visible; }
+    .task-card:hover .task-hover, .task-card:focus-within .task-hover,
+    .task-card:hover .hover-only, .task-card:focus-within .hover-only,
+    .task-card:hover .copy-btn, .task-card:focus-within .copy-btn,
+    .task-card:hover .drag-handle, .task-card:focus-within .drag-handle { visibility: visible; }
+    @media (hover: none) {
+      .task-hover, .hover-only, .copy-btn, .drag-handle { visibility: visible; }
+      .task-card .task-hover { display: flex !important; }
     }
-    .reorder-btn:disabled { opacity: .35; cursor: default; }
-    .task-actions button.ghost.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    /* ⋯ card menu (native <details>) */
+    details.card-menu { position: relative; }
+    details.card-menu > summary {
+      list-style: none; cursor: pointer; user-select: none;
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 26px; min-width: 28px; padding: 0 6px; border-radius: 7px;
+      border: 1px solid var(--border); background: var(--btn-bg); color: var(--text); font-weight: 700;
+    }
+    details.card-menu > summary::-webkit-details-marker { display: none; }
+    details.card-menu[open] > summary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .card-menu-list {
+      position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+      min-width: 220px; padding: 4px;
+      display: flex; flex-direction: column; gap: 2px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    .card-menu-list button {
+      width: 100%; min-height: 30px; padding: 4px 10px; font-size: 13px; text-align: left;
+      background: transparent; border-color: transparent;
+    }
+    .card-menu-list button:hover { background: var(--btn-bg); border-color: var(--border); }
+    .card-menu-list button.danger { color: var(--bad); }
+    .triage { display: flex; flex-direction: column; gap: 4px; padding-left: 26px; }
+    .triage .chips button { min-height: 26px; padding: 2px 10px; font-size: 12px; }
+    /* Tasks toolbar: sub-tabs + live search (#taskSearch) */
+    .task-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .task-toolbar .tabbar { flex: 1 1 auto; }
+    .task-toolbar #taskSearch { width: auto; flex: 0 1 280px; min-width: 180px; }
+    .capture-row.with-ticket { grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) minmax(0, 140px); }
+    .capture-ticket { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    textarea.capture-notes { margin-top: 8px; min-height: 120px; resize: vertical; }
+    button.link-btn {
+      width: auto; min-height: 0; margin-top: 6px; padding: 2px 4px;
+      background: transparent; border-color: transparent; color: var(--accent); font-size: 13px;
+    }
+    .edit-panel-foot { display: flex; justify-content: flex-end; }
+    .edit-panel-foot button { width: auto; min-height: 30px; padding: 4px 12px; font-size: 13px; }
 
     /* ── Pills ─────────────────────────────────────────────────── */
     .pill {
@@ -790,7 +904,8 @@
     .guard-msg { font-size: 13px; line-height: 1.5; }
     .guard-msg b { color: var(--text); }
     .guard-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .guard-actions button { width: auto; min-height: 34px; padding: 6px 12px; font-size: 13px; }
+    .guard-actions button { width: auto; min-height: 28px; padding: 3px 10px; font-size: 12px; }
+    #taskPromptDialog textarea { min-height: 160px; resize: vertical; }
     .nudge {
       display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
       padding: 8px 10px; border-radius: 10px;
@@ -867,7 +982,15 @@
       .app-head { flex-direction: column; align-items: stretch; }
       .app-head-actions { justify-content: flex-end; }
       .chip-group { align-items: flex-start; flex-direction: column; gap: 4px; }
-      .task-actions { width: 100%; }
+      .capture-row.with-ticket { grid-template-columns: 1fr; }
+      .task-toolbar #taskSearch { flex: 1 1 100%; }
+      /* Narrow: the action bar wraps below the text instead of squeezing
+         the title; with a mouse it only takes room while revealed. */
+      .task-row { flex-wrap: wrap; }
+      .task-body { flex: 1 1 calc(100% - 60px); }
+      .task-hover { margin-left: auto; }
+      .task-card:not(:hover):not(:focus-within) .task-hover:not(:has(.star-btn.on)) { display: none; }
+      .triage { padding-left: 0; }
     }
 
     /* ══════════════════════════════════════════════════════════
@@ -1178,7 +1301,10 @@
 
       </section>
       <section id="tabPanelTasks" class="tab-panel" hidden>
-    <nav class="tabbar" id="task-tabbar" aria-label="Ansichten"></nav>
+    <div class="task-toolbar">
+      <nav class="tabbar" id="task-tabbar" aria-label="Ansichten"></nav>
+      <input type="search" id="taskSearch" placeholder="Aufgaben durchsuchen …" aria-label="Aufgaben durchsuchen" autocomplete="off" maxlength="120">
+    </div>
     <main id="task-viewRoot"></main>
 
       </section>
@@ -3658,6 +3784,9 @@
       ];
 
       const INBOX_OVERFLOW = 10;
+      // Archived (terminal) tasks are deleted this many days after doneAt —
+      // see purgeOldArchive(). Backups keep the older state.
+      const ARCHIVE_RETENTION_DAYS = 30;
       const STALE_DAYS = 28;
       const CARRY_WARN = 3;
       const FOCUS_SOFT_LIMIT = 5;
@@ -3711,6 +3840,30 @@
 
       function sanitizeText(value, maxLen) {
         return String(value == null ? '' : value).replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, maxLen);
+      }
+
+      // Task notes keep line breaks and tabs; sanitizeText would collapse a
+      // multi-line note to one line.
+      function sanitizeMultiline(value, maxLen) {
+        return String(value == null ? '' : value)
+          .replace(/\r\n?/g, '\n')
+          .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, ' ')
+          .trim()
+          .slice(0, maxLen);
+      }
+
+      // "ABC-123: Titel" → { ticket: 'ABC-123', title: 'Titel' }. Splits only
+      // when the part before the first ':' looks like a ticket key, so a
+      // title like "Meeting: Planung" is left alone.
+      function splitTicketPrefix(text) {
+        const raw = String(text == null ? '' : text);
+        const idx = raw.indexOf(':');
+        if (idx > 0) {
+          const head = raw.slice(0, idx).trim();
+          const rest = raw.slice(idx + 1).trim();
+          if (rest && /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(head)) return { ticket: head, title: rest };
+        }
+        return { ticket: '', title: raw };
       }
 
       function clampNumber(value, min, max) {
@@ -3888,7 +4041,9 @@
         filterContext: 'all',
         backupDismissed: false,
         backupDue: false,
-        editingTaskId: null   // id of the task whose "Priorität & Aufwand" panel is expanded
+        editingTaskId: null,  // id of the task whose "Priorität & Aufwand" panel is expanded
+        searchQuery: '',      // live search (#taskSearch); non-empty replaces the active view
+        captureNotesOpen: false
       };
 
       function isValidTask(t) {
@@ -3902,10 +4057,10 @@
         let plannedWeek = parseIsoWeekKey(t.plannedWeek) ? t.plannedWeek : null;
 
         // Repair invariants: backlog/planned are the assessed working statuses
-        // and require both priority and effort. Terminal statuses are
+        // and require a priority (effort is optional). Terminal statuses are
         // deliberately reachable straight from the inbox without triage (drop,
         // "sofort erledigt", escalate), so they must survive a reload as-is.
-        if (status !== 'inbox' && !isTerminal(status) && (!priority || !effort)) status = 'inbox';
+        if (status !== 'inbox' && !isTerminal(status) && !priority) status = 'inbox';
         // A planned task without a parseable week falls back to the backlog.
         if (status === 'planned' && !plannedWeek) status = 'backlog';
         if (status !== 'planned') plannedWeek = null;
@@ -3921,7 +4076,7 @@
         return {
           id: typeof t.id === 'string' && t.id ? t.id : cryptoRandomId(),
           title: sanitizeText(t.title, MAX_TITLE),
-          notes: sanitizeText(t.notes || '', MAX_NOTES),
+          notes: sanitizeMultiline(t.notes || '', MAX_NOTES),
           context: sanitizeText(t.context || '', MAX_CONTEXT),
           priority,
           effort,
@@ -4012,14 +4167,23 @@
          Actions
          ══════════════════════════════════════════════════════════ */
 
-      function captureTask(title) {
-        const clean = sanitizeText(title, MAX_TITLE);
+      // extra: { ticket, notes } — both optional. Without an explicit ticket,
+      // an "ABC-123: Titel" prefix in the title is split off (splitTicketPrefix).
+      function captureTask(title, extra = {}) {
+        let ticket = sanitizeText(extra && extra.ticket, MAX_EXTERNAL_REF);
+        let rawTitle = title;
+        if (!ticket) {
+          const split = splitTicketPrefix(title);
+          ticket = sanitizeText(split.ticket, MAX_EXTERNAL_REF);
+          rawTitle = split.title;
+        }
+        const clean = sanitizeText(rawTitle, MAX_TITLE);
         if (!clean) return null;
         const now = Date.now();
         const task = normalizeTask({
           id: cryptoRandomId(),
           title: clean,
-          notes: '',
+          notes: sanitizeMultiline(extra && extra.notes, MAX_NOTES),
           context: '',
           priority: null,
           effort: null,
@@ -4027,7 +4191,7 @@
           plannedWeek: null,
           todayFlag: false,
           carryCount: 0,
-          externalRef: '',
+          externalRef: ticket,
           createdAt: now,
           updatedAt: now,
           doneAt: null
@@ -4050,8 +4214,8 @@
       function setEffort(id, effort) {
         const task = findTask(id);
         if (!task || !EFFORT_KEYS.includes(effort)) return;
+        // Effort is optional — clearing it never bounces the task to the inbox.
         task.effort = task.effort === effort ? null : effort;
-        if (!task.effort && task.status !== 'inbox') task.status = 'inbox';
         touch(task);
         saveState();
         render();
@@ -4112,7 +4276,15 @@
 
       function changeEffort(id, effort) {
         const task = findTask(id);
-        if (!task || !EFFORT_KEYS.includes(effort) || task.effort === effort) return;
+        if (!task || !EFFORT_KEYS.includes(effort)) return;
+        // Effort is optional, so clicking the active chip clears it.
+        if (task.effort === effort) {
+          task.effort = null;
+          touch(task);
+          saveState();
+          render();
+          return;
+        }
         task.effort = effort;
         // The guardrails still apply retroactively: a planned task can't
         // stay scheduled once it's reclassified as oversized or unframed.
@@ -4130,7 +4302,7 @@
 
       function moveToBacklog(id) {
         const task = findTask(id);
-        if (!task || !task.priority || !task.effort) return;
+        if (!task || !task.priority) return;
         task.status = 'backlog';
         task.plannedWeek = null;
         task.todayFlag = false;
@@ -4142,7 +4314,7 @@
 
       function planTask(id, weekKey) {
         const task = findTask(id);
-        if (!task || !task.priority || !task.effort) return;
+        if (!task || !task.priority) return;
         if (!parseIsoWeekKey(weekKey)) return;
         // guardrail: oversized work is not planned here, and unframed work
         // isn't planned until its scope is known.
@@ -4226,7 +4398,7 @@
       function reopenTask(id) {
         const task = findTask(id);
         if (!task) return;
-        task.status = task.priority && task.effort ? 'backlog' : 'inbox';
+        task.status = task.priority ? 'backlog' : 'inbox';
         task.doneAt = null;
         touch(task);
         saveState();
@@ -4264,42 +4436,47 @@
         });
       }
 
-      async function editTask(id) {
+      // Backs inline editing of ticket, title and notes (startInlineEdit).
+      // Returns false when the value was rejected.
+      function saveTaskField(id, field, value) {
         const task = findTask(id);
-        if (!task) return;
-        const title = await promptText({
-          title: 'Aufgabe bearbeiten',
-          message: 'Titel der Aufgabe.',
-          label: 'Titel',
-          value: task.title
-        });
-        if (title === null) return;
-        const clean = sanitizeText(title, MAX_TITLE);
-        if (!clean) {
-          showToast('Der Titel darf nicht leer sein.', { variant: 'bad' });
-          return;
+        if (!task) return false;
+        let clean;
+        if (field === 'title') {
+          clean = sanitizeText(value, MAX_TITLE);
+          if (!clean) {
+            showToast('Der Titel darf nicht leer sein.', { variant: 'bad' });
+            return false;
+          }
+        } else if (field === 'notes') {
+          clean = sanitizeMultiline(value, MAX_NOTES);
+        } else if (field === 'externalRef') {
+          clean = sanitizeText(value, MAX_EXTERNAL_REF);
+        } else {
+          return false;
         }
-        task.title = clean;
-        touch(task);
-        saveState();
-        render();
+        if (task[field] !== clean) {
+          task[field] = clean;
+          touch(task);
+          saveState();
+        }
+        return true;
       }
 
-      async function editNotes(id) {
-        const task = findTask(id);
-        if (!task) return;
-        const notes = await promptText({
-          title: 'Notiz',
-          message: 'Zusätzliche Notiz zu dieser Aufgabe.',
-          label: 'Notiz',
-          value: task.notes,
-          multiline: true
-        });
-        if (notes === null) return;
-        task.notes = sanitizeText(notes, MAX_NOTES);
-        touch(task);
-        saveState();
-        render();
+      // Removes terminal tasks whose doneAt is older than ARCHIVE_RETENTION_DAYS.
+      function purgeOldArchive(now) {
+        const cutoff = (now || Date.now()) - ARCHIVE_RETENTION_DAYS * DAY_MS;
+        const before = state.tasks.length;
+        state.tasks = state.tasks.filter(t => !(isTerminal(t.status) && t.doneAt && t.doneAt < cutoff));
+        const removed = before - state.tasks.length;
+        if (removed > 0) saveState();
+        return removed;
+      }
+
+      function notifyPurge(removed) {
+        if (removed > 0) {
+          showToast(`${removed} archivierte Aufgabe${removed === 1 ? '' : 'n'} gelöscht (älter als ${ARCHIVE_RETENTION_DAYS} Tage).`);
+        }
       }
 
       async function editContext(id) {
@@ -4314,22 +4491,6 @@
         if (value === null) return;
         task.context = sanitizeText(value, MAX_CONTEXT);
         rememberContext(task.context);
-        touch(task);
-        saveState();
-        render();
-      }
-
-      async function editExternalRef(id) {
-        const task = findTask(id);
-        if (!task) return;
-        const value = await promptText({
-          title: 'Story-Key',
-          message: 'Referenz auf die Story im Unternehmenssystem, z. B. „PROJ-1234".',
-          label: 'Story-Key',
-          value: task.externalRef
-        });
-        if (value === null) return;
-        task.externalRef = sanitizeText(value, MAX_EXTERNAL_REF);
         touch(task);
         saveState();
         render();
@@ -4371,6 +4532,15 @@
 
       function archivedTasks() {
         return state.tasks.filter(t => isTerminal(t.status)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+      }
+
+      // Case-insensitive; every whitespace-separated term must appear in
+      // title, notes, context or ticket.
+      function matchesSearch(task, query) {
+        const terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.length) return false;
+        const hay = [task.title, task.notes, task.context, task.externalRef].join('\n').toLowerCase();
+        return terms.every(term => hay.includes(term));
       }
 
       function leftoverTasks(weekKey) {
@@ -4538,14 +4708,22 @@
          Rendering — task cards
          ══════════════════════════════════════════════════════════ */
 
+      function trackingEnabled() {
+        return Boolean(window.LWT && window.LWT.time && (!window.LWT.shell || window.LWT.shell.isTimeTrackingEnabled()));
+      }
+
       function taskMeta(task, now) {
         const meta = el('div', { className: 'task-meta' });
-        if (task.priority) meta.appendChild(pill(priorityLabel(task.priority), 'prio-' + task.priority));
-        if (task.effort) meta.appendChild(pill(effortLabel(task.effort)));
+        // Inside the views the priority is already named by the group header
+        // and the card's coloured edge; search results mix groups, so there
+        // it is shown explicitly.
+        const searching = Boolean(ui.searchQuery);
+        if (searching && task.priority) meta.appendChild(pill(priorityLabel(task.priority), 'prio-' + task.priority));
+        if (searching && task.status === 'planned' && task.plannedWeek) meta.appendChild(pill(shortWeek(task.plannedWeek)));
+        if (task.effort) meta.appendChild(pill(effortLabel(task.effort), 'effort-' + task.effort));
         if (task.context) meta.appendChild(pill(task.context));
-        if (task.externalRef) meta.appendChild(pill(task.externalRef, 'state-escalated'));
         if (task.carryCount > 0) meta.appendChild(pill(`${task.carryCount}× verschoben`));
-        if (window.LWT && window.LWT.time && (!window.LWT.shell || window.LWT.shell.isTimeTrackingEnabled())) {
+        if (trackingEnabled()) {
           const tracked = window.LWT.time.getTrackedMinutesLabel(task.id);
           if (tracked) meta.appendChild(pill('⏱ ' + tracked));
         }
@@ -4553,41 +4731,252 @@
         return meta;
       }
 
-      function taskCardShell(task, now, opts = {}) {
-        const card = el('div', { className: 'task-card' + (opts.focus ? ' focus' : '') });
-        const main = el('div', { className: 'task-main' });
-        const text = el('div', { className: 'task-text' });
-        text.appendChild(el('div', { className: 'task-title', text: task.title }));
-        text.appendChild(taskMeta(task, now));
-        main.appendChild(text);
-        card.appendChild(main);
-        if (task.notes) card.appendChild(el('div', { className: 'task-notes', text: task.notes }));
-        return { card, main };
+      /* ── Copy & inline editing ─────────────────────────────── */
+
+      function copyText(text) {
+        const done = () => showToast('Kopiert.', { variant: 'good', timeoutMs: 1800 });
+        const fallback = () => {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          let ok = false;
+          try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+          ta.remove();
+          if (ok) done(); else showToast('Kopieren nicht möglich.', { variant: 'bad' });
+        };
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          navigator.clipboard.writeText(text).then(done, fallback);
+        } else {
+          fallback();
+        }
       }
 
-      // Single entry point into editing. Nothing else about a task is
-      // clickable-to-edit by default — the panel only appears once this is
-      // clicked, so a card's default action row stays short.
-      function editToggleButton(task) {
-        const isOpen = ui.editingTaskId === task.id;
-        const toggle = button('Bearbeiten', {
-          className: 'ghost' + (isOpen ? ' active' : ''),
-          onClick: () => { ui.editingTaskId = isOpen ? null : task.id; render(); }
+      function copyButton(getText, what) {
+        return button('⧉', {
+          className: 'icon-btn copy-btn',
+          title: what + ' kopieren',
+          attrs: { 'aria-label': what + ' kopieren' },
+          onClick: ev => { ev.stopPropagation(); copyText(getText()); }
         });
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        return toggle;
+      }
+
+      const INLINE_FIELDS = {
+        title: { multiline: false, max: MAX_TITLE, label: 'Titel' },
+        externalRef: { multiline: false, max: MAX_EXTERNAL_REF, label: 'Ticket' },
+        notes: { multiline: true, max: MAX_NOTES, label: 'Notiz' }
+      };
+
+      // Swaps a card's display node for an input/textarea. Enter (title,
+      // ticket), Ctrl/Cmd+Enter (notes) or leaving the field saves; Esc
+      // cancels. Either way the view re-renders from state.
+      function startInlineEdit(task, field, node) {
+        const cfg = INLINE_FIELDS[field];
+        if (!cfg || !node || !node.parentNode) return;
+        const editor = document.createElement(cfg.multiline ? 'textarea' : 'input');
+        if (!cfg.multiline) editor.type = 'text';
+        editor.className = 'inline-edit' + (cfg.multiline ? ' task-notes-edit' : '') + (field === 'externalRef' ? ' ticket-edit' : '');
+        editor.maxLength = cfg.max;
+        editor.value = task[field] || '';
+        editor.setAttribute('aria-label', cfg.label + ' bearbeiten');
+        editor.autocomplete = 'off';
+        if (field === 'externalRef') editor.placeholder = 'Ticket';
+        let settled = false;
+        const finish = save => {
+          if (settled) return;
+          settled = true;
+          if (save) saveTaskField(task.id, field, editor.value);
+          render();
+        };
+        editor.addEventListener('keydown', ev => {
+          if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); return; }
+          if (ev.key === 'Enter' && (!cfg.multiline || ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); finish(true); }
+        });
+        editor.addEventListener('blur', () => finish(true));
+        // Clicks inside the editor must not bubble to the card/handle.
+        editor.addEventListener('click', ev => ev.stopPropagation());
+        node.replaceWith(editor);
+        if (cfg.multiline) {
+          const max = Math.round(window.innerHeight * 0.5);
+          editor.style.height = Math.min(max, Math.max(160, editor.scrollHeight + 4)) + 'px';
+        }
+        editor.focus();
+        if (cfg.multiline) editor.setSelectionRange(editor.value.length, editor.value.length);
+        else editor.select();
+      }
+
+      // Click-to-edit, but not when the click ended a text selection — the
+      // user may just be selecting part of the text to copy it.
+      function editableText(task, field, node) {
+        node.classList.add('editable');
+        node.tabIndex = 0;
+        node.title = INLINE_FIELDS[field].label + ' bearbeiten (Klick)';
+        node.addEventListener('click', () => {
+          const sel = window.getSelection ? String(window.getSelection()) : '';
+          if (sel) return;
+          startInlineEdit(task, field, node);
+        });
+        node.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter' || ev.key === 'F2') { ev.preventDefault(); startInlineEdit(task, field, node); }
+        });
+        return node;
+      }
+
+      /* ── Card menu (⋯) ─────────────────────────────────────── */
+
+      // items: [{ label, onClick, danger }] — falsy entries are skipped.
+      function cardMenu(items) {
+        const list = items.filter(Boolean);
+        if (!list.length) return null;
+        const menu = el('details', { className: 'card-menu' });
+        const summary = el('summary', { text: '⋯', title: 'Weitere Aktionen', attrs: { 'aria-label': 'Weitere Aktionen' } });
+        menu.appendChild(summary);
+        const box = el('div', { className: 'card-menu-list', attrs: { role: 'menu' } });
+        list.forEach(item => {
+          const b = button(item.label, {
+            className: item.danger ? 'danger' : '',
+            attrs: { role: 'menuitem' },
+            onClick: () => { menu.open = false; item.onClick(); }
+          });
+          box.appendChild(b);
+        });
+        menu.appendChild(box);
+        menu.addEventListener('toggle', () => {
+          if (!menu.open) return;
+          document.querySelectorAll('#task-viewRoot details.card-menu[open]').forEach(d => { if (d !== menu) d.open = false; });
+        });
+        return menu;
+      }
+
+      function closeCardMenus(except) {
+        document.querySelectorAll('#task-viewRoot details.card-menu[open]').forEach(d => {
+          if (!except || !d.contains(except)) d.open = false;
+        });
+      }
+
+      document.addEventListener('click', ev => closeCardMenus(ev.target));
+      document.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape' && document.querySelector('#task-viewRoot details.card-menu[open]')) closeCardMenus(null);
+      });
+
+      function detailsToggleItem(task) {
+        const isOpen = ui.editingTaskId === task.id;
+        return {
+          label: isOpen ? 'Details schließen' : (task.status === 'planned' ? 'Priorität, Aufwand, Woche …' : 'Priorität & Aufwand …'),
+          onClick: () => { ui.editingTaskId = isOpen ? null : task.id; render(); }
+        };
+      }
+
+      function contextItem(task) {
+        return { label: task.context ? 'Kontext ändern …' : 'Kontext hinzufügen …', onClick: () => editContext(task.id) };
+      }
+
+      // Opens the notes editor on a card that has no note yet.
+      function addNoteItem(task) {
+        if (task.notes) return null;
+        return {
+          label: 'Notiz hinzufügen',
+          onClick: () => {
+            const card = document.querySelector(`#task-viewRoot .task-card[data-task-id="${CSS.escape(task.id)}"]`);
+            const slot = card && card.querySelector('.task-notes-slot');
+            if (slot) startInlineEdit(task, 'notes', slot);
+          }
+        };
+      }
+
+      /* ── Card shell ────────────────────────────────────────── */
+
+      // opts.check: { onClick, title } for the round "Erledigt" checkbox, or
+      //             { glyph, title } for a read-only status marker (archive).
+      // opts.dragHandle: makes the card reorderable via a ⠿ handle (the card
+      //             itself stays non-draggable so its text remains selectable).
+      // Returns { card, body, hover } — renderers append their actions to hover.
+      function taskCardShell(task, now, opts = {}) {
+        const card = el('div', {
+          className: 'task-card' + (task.priority ? ' prio-' + task.priority : '') + (opts.focus ? ' focus' : '')
+        });
+        card.dataset.taskId = task.id;
+        const row = el('div', { className: 'task-row' });
+
+        if (opts.dragHandle) {
+          const handle = el('span', {
+            className: 'drag-handle',
+            text: '⠿',
+            title: 'Ziehen zum Sortieren',
+            attrs: { draggable: 'true', 'aria-hidden': 'true' }
+          });
+          handle.addEventListener('dragstart', ev => {
+            ev.dataTransfer.effectAllowed = 'move';
+            ev.dataTransfer.setData('text/plain', task.id);
+            if (ev.dataTransfer.setDragImage) ev.dataTransfer.setDragImage(card, 16, 16);
+            requestAnimationFrame(() => card.classList.add('dragging'));
+          });
+          handle.addEventListener('dragend', () => card.classList.remove('dragging'));
+          row.appendChild(handle);
+        }
+
+        if (opts.check && opts.check.onClick) {
+          row.appendChild(button('', {
+            className: 'task-check',
+            title: opts.check.title || 'Erledigt',
+            attrs: { 'aria-label': opts.check.title || 'Erledigt' },
+            onClick: opts.check.onClick
+          }));
+        } else if (opts.check && opts.check.glyph) {
+          row.appendChild(el('span', { className: 'task-check static state-' + task.status, text: opts.check.glyph, title: opts.check.title || '' }));
+        }
+
+        const body = el('div', { className: 'task-body' });
+        const line = el('div', { className: 'task-line' });
+        const titleWrap = el('span', { className: 'task-title-wrap' });
+        titleWrap.appendChild(editableText(task, 'title', el('span', { className: 'task-title', text: task.title })));
+        titleWrap.appendChild(copyButton(() => task.title, 'Titel'));
+        if (task.externalRef) {
+          const chip = el('span', { className: 'ticket-chip' });
+          chip.appendChild(editableText(task, 'externalRef', el('span', { className: 'ticket-text', text: task.externalRef })));
+          chip.appendChild(copyButton(() => task.externalRef, 'Ticket'));
+          line.appendChild(chip);
+          line.appendChild(titleWrap);
+        } else {
+          // Trailing, so a hidden "+ Ticket" never indents the title. Once
+          // clicked, the editor is moved in front of the title.
+          line.appendChild(titleWrap);
+          const add = button('+ Ticket', {
+            className: 'ticket-add hover-only',
+            title: 'Ticket hinzufügen',
+            onClick: ev => {
+              ev.stopPropagation();
+              line.insertBefore(add, titleWrap);
+              startInlineEdit(task, 'externalRef', add);
+            }
+          });
+          titleWrap.appendChild(add);
+        }
+        body.appendChild(line);
+        body.appendChild(taskMeta(task, now));
+
+        if (task.notes) {
+          const notesWrap = el('div', { className: 'task-notes-wrap' });
+          notesWrap.appendChild(editableText(task, 'notes', el('div', { className: 'task-notes task-notes-slot', text: task.notes })));
+          notesWrap.appendChild(copyButton(() => task.notes, 'Notiz'));
+          body.appendChild(notesWrap);
+        } else {
+          // Invisible anchor for "Notiz hinzufügen" (see addNoteItem).
+          body.appendChild(el('div', { className: 'task-notes-slot empty-slot' }));
+        }
+        row.appendChild(body);
+
+        const hover = el('div', { className: 'task-hover' });
+        row.appendChild(hover);
+        card.appendChild(row);
+        return { card, body, hover };
       }
 
       function renderEditPanel(task, opts = {}) {
         const panel = el('div', { className: 'edit-panel' });
-        const fields = el('div', { className: 'task-actions' });
-        fields.appendChild(button('Titel ✎', { className: 'ghost', onClick: () => editTask(task.id) }));
-        fields.appendChild(button(task.notes ? 'Notiz ✎' : 'Notiz +', { className: 'ghost', onClick: () => editNotes(task.id) }));
-        fields.appendChild(button(task.context ? 'Kontext ✎' : 'Kontext +', { className: 'ghost', onClick: () => editContext(task.id) }));
-        if (task.status === 'escalated') {
-          fields.appendChild(button('Story-Key ✎', { className: 'ghost', onClick: () => editExternalRef(task.id) }));
-        }
-        panel.appendChild(fields);
         // The inbox already shows the priority/effort chips permanently as
         // part of triage — repeating them here would be pure duplication.
         if (!opts.hideClassification) {
@@ -4608,6 +4997,9 @@
           group.appendChild(select);
           panel.appendChild(group);
         }
+        const foot = el('div', { className: 'edit-panel-foot' });
+        foot.appendChild(button('Fertig', { className: 'ghost', onClick: () => { ui.editingTaskId = null; render(); } }));
+        panel.appendChild(foot);
         return panel;
       }
 
@@ -4690,64 +5082,44 @@
         return box;
       }
 
-      function renderInboxCard(task, now) {
-        const { card, main } = taskCardShell(task, now);
-        main.appendChild(el('div', { className: 'task-actions' }, [
-          editToggleButton(task),
-          button('Verwerfen', { className: 'ghost', onClick: () => dropTask(task.id) })
-        ]));
-        if (ui.editingTaskId === task.id) card.appendChild(renderEditPanel(task, { hideClassification: true }));
-        card.appendChild(chipRow('Priorität', PRIORITIES, task.priority, k => setPriority(task.id, k), 'prio'));
-        card.appendChild(chipRow('Aufwand', EFFORTS, task.effort, k => setEffort(task.id, k), 'effort'));
-        if (task.priority && task.effort) card.appendChild(guardFooter(task));
+      function renderInboxCard(task, now, opts = {}) {
+        const { card, body, hover } = taskCardShell(task, now, {
+          check: { onClick: () => completeTask(task.id), title: 'Sofort erledigt' }
+        });
+        const menu = cardMenu([contextItem(task), addNoteItem(task), { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }]);
+        if (menu) hover.appendChild(menu);
+        if (opts.compact) return card;
+        const triage = el('div', { className: 'triage' });
+        triage.appendChild(chipRow('Priorität', PRIORITIES, task.priority, k => setPriority(task.id, k), 'prio'));
+        triage.appendChild(chipRow('Aufwand (optional)', EFFORTS, task.effort, k => setEffort(task.id, k), 'effort'));
+        card.appendChild(triage);
+        if (task.priority) card.appendChild(guardFooter(task));
         return card;
       }
 
       function renderPlannedCard(task, now, opts = {}) {
-        const { draggable = true } = opts;
-        const { card, main } = taskCardShell(task, now, { focus: task.todayFlag });
         // Manual drag&drop priorisation is scoped to this card type only
         // (Woche/Geplant) — see attachReorder(). draggable is false for the
-        // Heute-Sektion duplicate above the priority groups, since dragging
-        // there would only see that filtered subset and corrupt orderKey
-        // for the peers hidden below.
-        card.draggable = draggable;
-        card.dataset.taskId = task.id;
-        if (draggable) {
-          card.addEventListener('dragstart', ev => {
-            ev.dataTransfer.effectAllowed = 'move';
-            ev.dataTransfer.setData('text/plain', task.id);
-            requestAnimationFrame(() => card.classList.add('dragging'));
-          });
-          card.addEventListener('dragend', () => card.classList.remove('dragging'));
-        }
+        // Heute-Sektion duplicate above the priority groups (and in search
+        // results), since reordering there would only see a filtered subset
+        // and corrupt orderKey for the peers hidden below.
+        const { draggable = true } = opts;
+        const { card, hover } = taskCardShell(task, now, {
+          focus: task.todayFlag,
+          dragHandle: draggable,
+          check: { onClick: () => completeTask(task.id), title: 'Erledigt' }
+        });
 
-        const actions = el('div', { className: 'task-actions' });
-        const peers = reorderPeers(task);
-        const peerIdx = peers.findIndex(t => t.id === task.id);
-        const moveUp = button('▲', {
-          className: 'ghost reorder-btn',
-          title: 'Nach oben verschieben',
-          onClick: () => moveTaskStep(task.id, -1)
-        });
-        moveUp.disabled = peerIdx <= 0;
-        const moveDown = button('▼', {
-          className: 'ghost reorder-btn',
-          title: 'Nach unten verschieben',
-          onClick: () => moveTaskStep(task.id, 1)
-        });
-        moveDown.disabled = peerIdx < 0 || peerIdx >= peers.length - 1;
-        actions.appendChild(moveUp);
-        actions.appendChild(moveDown);
         const star = button(task.todayFlag ? '★' : '☆', {
-          className: 'star-btn' + (task.todayFlag ? ' on' : ''),
+          className: 'icon-btn star-btn' + (task.todayFlag ? ' on' : ''),
           title: task.todayFlag ? 'Aus dem Heute-Fokus nehmen' : 'In den Heute-Fokus nehmen',
+          attrs: { 'aria-pressed': task.todayFlag ? 'true' : 'false' },
           onClick: () => toggleToday(task.id)
         });
-        actions.appendChild(star);
-        if (window.LWT && window.LWT.time && (!window.LWT.shell || window.LWT.shell.isTimeTrackingEnabled())) {
-          actions.appendChild(button('▶', {
-            className: 'primary reorder-btn',
+        hover.appendChild(star);
+        if (trackingEnabled()) {
+          hover.appendChild(button('▶', {
+            className: 'icon-btn primary',
             title: 'Timer für diese Aufgabe starten',
             attrs: { 'aria-label': 'Timer für diese Aufgabe starten' },
             onClick: () => {
@@ -4756,16 +5128,28 @@
             }
           }));
         }
-        actions.appendChild(button('Erledigt', { className: 'good', onClick: () => completeTask(task.id) }));
-        actions.appendChild(button('→ ' + shortWeek(weekKeyOffset(task.plannedWeek, 1)), {
-          className: 'ghost',
-          title: 'In die nächste Woche verschieben',
-          onClick: () => carryOverTask(task.id, 1)
-        }));
-        actions.appendChild(button('Ins Backlog', { className: 'ghost', onClick: () => moveToBacklog(task.id) }));
-        actions.appendChild(editToggleButton(task));
-        actions.appendChild(button('Verwerfen', { className: 'ghost', onClick: () => dropTask(task.id) }));
-        main.appendChild(actions);
+
+        let upItem = null;
+        let downItem = null;
+        if (draggable) {
+          const peers = reorderPeers(task);
+          const peerIdx = peers.findIndex(t => t.id === task.id);
+          if (peerIdx > 0) upItem = { label: 'Nach oben', onClick: () => moveTaskStep(task.id, -1) };
+          if (peerIdx >= 0 && peerIdx < peers.length - 1) downItem = { label: 'Nach unten', onClick: () => moveTaskStep(task.id, 1) };
+        }
+        const menu = cardMenu([
+          { label: 'In ' + shortWeek(weekKeyOffset(task.plannedWeek, 1)) + ' verschieben', onClick: () => carryOverTask(task.id, 1) },
+          { label: 'Ins Backlog', onClick: () => moveToBacklog(task.id) },
+          upItem,
+          downItem,
+          detailsToggleItem(task),
+          contextItem(task),
+          addNoteItem(task),
+          { label: 'Als Story eskalieren …', onClick: () => escalateTask(task.id) },
+          { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }
+        ]);
+        if (menu) hover.appendChild(menu);
+
         if (ui.editingTaskId === task.id) card.appendChild(renderEditPanel(task));
         if (task.carryCount >= CARRY_WARN) {
           card.appendChild(nudge(`${task.carryCount}× verschoben — ist das wirklich wichtig?`, [
@@ -4777,23 +5161,28 @@
       }
 
       function renderBacklogCard(task, now) {
-        const { card, main } = taskCardShell(task, now);
-        const actions = el('div', { className: 'task-actions' });
+        const { card, hover } = taskCardShell(task, now, {
+          check: { onClick: () => completeTask(task.id), title: 'Erledigt' }
+        });
         if (task.effort === 'toolarge') {
-          actions.appendChild(button('Als Story eskalieren', { className: 'primary', onClick: () => escalateTask(task.id) }));
+          hover.appendChild(button('Eskalieren', { className: 'primary small-btn', onClick: () => escalateTask(task.id) }));
         } else if (task.effort !== 'tbd') {
-          // 'tbd' has no planning action here — the "Aufwand" chip below is
-          // the way out, once the scope is known.
-          actions.appendChild(button(`In ${shortWeek(ui.weekKey)}`, {
-            className: 'primary',
+          // 'tbd' has no planning action here — "Priorität & Aufwand" in the
+          // menu is the way out, once the scope is known.
+          hover.appendChild(button(`→ ${shortWeek(ui.weekKey)}`, {
+            className: 'primary small-btn',
             title: 'In die angezeigte Kalenderwoche planen',
             onClick: () => planTask(task.id, ui.weekKey)
           }));
         }
-        actions.appendChild(button('Erledigt', { className: 'good', onClick: () => completeTask(task.id) }));
-        actions.appendChild(editToggleButton(task));
-        actions.appendChild(button('Verwerfen', { className: 'ghost', onClick: () => dropTask(task.id) }));
-        main.appendChild(actions);
+        const menu = cardMenu([
+          detailsToggleItem(task),
+          contextItem(task),
+          addNoteItem(task),
+          task.effort !== 'toolarge' ? { label: 'Als Story eskalieren …', onClick: () => escalateTask(task.id) } : null,
+          { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }
+        ]);
+        if (menu) hover.appendChild(menu);
         if (ui.editingTaskId === task.id) card.appendChild(renderEditPanel(task));
         if (isStale(task, now)) {
           const weeks = Math.floor((now - task.updatedAt) / (7 * DAY_MS));
@@ -4805,16 +5194,56 @@
         return card;
       }
 
+      const ARCHIVE_GLYPHS = { done: '✓', dropped: '✕', escalated: '↗' };
+
       function renderArchiveCard(task, now) {
-        const { card, main } = taskCardShell(task, now);
-        const meta = main.querySelector('.task-meta');
+        const { card, body, hover } = taskCardShell(task, now, {
+          check: { glyph: ARCHIVE_GLYPHS[task.status] || '•', title: statusLabel(task.status) }
+        });
+        const meta = body.querySelector('.task-meta');
         meta.insertBefore(pill(statusLabel(task.status), 'state-' + task.status), meta.firstChild);
         meta.appendChild(el('span', { text: 'abgeschlossen ' + formatDateShort(task.doneAt) }));
-        main.appendChild(el('div', { className: 'task-actions' }, [
-          editToggleButton(task),
-          button('Wieder aufnehmen', { className: 'ghost', onClick: () => reopenTask(task.id) }),
-          button('Löschen', { className: 'ghost', onClick: () => deleteTask(task.id) })
-        ]));
+        if (task.doneAt) {
+          const left = Math.ceil((task.doneAt + ARCHIVE_RETENTION_DAYS * DAY_MS - now) / DAY_MS);
+          if (left <= 7) meta.appendChild(el('span', { className: 'purge-soon', text: left <= 1 ? 'wird morgen gelöscht' : `wird in ${left} Tagen gelöscht` }));
+        }
+        hover.appendChild(button('↺', {
+          className: 'icon-btn',
+          title: 'Wieder aufnehmen',
+          attrs: { 'aria-label': 'Wieder aufnehmen' },
+          onClick: () => reopenTask(task.id)
+        }));
+        hover.appendChild(button('🗑', {
+          className: 'icon-btn',
+          title: 'Löschen',
+          attrs: { 'aria-label': 'Löschen' },
+          onClick: () => deleteTask(task.id)
+        }));
+        return card;
+      }
+
+      function renderLeftoverCard(task, now) {
+        const { card, body, hover } = taskCardShell(task, now, {
+          check: { onClick: () => completeTask(task.id), title: 'Erledigt' }
+        });
+        const meta = body.querySelector('.task-meta');
+        meta.insertBefore(pill(shortWeek(task.plannedWeek)), meta.firstChild);
+        hover.appendChild(button(`→ ${shortWeek(ui.weekKey)}`, {
+          className: 'primary small-btn',
+          title: `Mitnehmen nach ${shortWeek(ui.weekKey)}`,
+          onClick: () => {
+            const delta = Math.round((isoWeekStart(ui.weekKey) - isoWeekStart(task.plannedWeek)) / (7 * DAY_MS));
+            carryOverTask(task.id, delta > 0 ? delta : 1);
+          }
+        }));
+        const menu = cardMenu([
+          { label: 'Ins Backlog', onClick: () => moveToBacklog(task.id) },
+          detailsToggleItem(task),
+          contextItem(task),
+          addNoteItem(task),
+          { label: 'Verwerfen', danger: true, onClick: () => dropTask(task.id) }
+        ]);
+        if (menu) hover.appendChild(menu);
         if (ui.editingTaskId === task.id) card.appendChild(renderEditPanel(task));
         return card;
       }
@@ -4879,11 +5308,12 @@
         clear(task_tabbar);
         const inboxCount = inboxTasks().length;
         TABS.forEach(tab => {
+          const isActive = !ui.searchQuery && ui.tab === tab.key;
           const b = button(tab.label, {
-            className: ui.tab === tab.key ? 'active' : '',
-            onClick: () => { ui.tab = tab.key; render(); }
+            className: isActive ? 'active' : '',
+            onClick: () => { ui.tab = tab.key; clearSearch(); render(); }
           });
-          b.setAttribute('aria-current', ui.tab === tab.key ? 'page' : 'false');
+          b.setAttribute('aria-current', isActive ? 'page' : 'false');
           if (tab.key === 'inbox' && inboxCount > 0) {
             b.appendChild(el('span', {
               className: 'tab-badge' + (inboxCount > INBOX_OVERFLOW ? ' over' : ''),
@@ -4899,25 +5329,52 @@
 
         const capture = el('section', { className: 'panel' });
         capture.appendChild(el('div', { className: 'panel-head' }, [el('h2', { text: 'Schnellerfassung' })]));
-        const captureRow = el('div', { className: 'capture-row' });
-        const input = el('input', { type: 'text', attrs: { id: 'captureInput', placeholder: 'Was ist dir aufgefallen?', autocomplete: 'off', maxlength: String(MAX_TITLE) } });
+        const captureRow = el('div', { className: 'capture-row with-ticket' });
+        const ticketInput = el('input', { type: 'text', className: 'capture-ticket', attrs: { id: 'captureTicket', placeholder: 'Ticket', 'aria-label': 'Ticket (optional)', autocomplete: 'off', maxlength: String(MAX_EXTERNAL_REF) } });
+        const input = el('input', { type: 'text', attrs: { id: 'captureInput', placeholder: 'Was ist dir aufgefallen?', 'aria-label': 'Titel', autocomplete: 'off', maxlength: String(MAX_TITLE) } });
         const submit = button('Erfassen', { className: 'primary' });
+        let notesInput = null;
         const doCapture = () => {
-          const task = captureTask(input.value);
+          const task = captureTask(input.value, { ticket: ticketInput.value, notes: notesInput ? notesInput.value : '' });
           if (!task) { input.focus(); return; }
-          input.value = '';
+          ui.captureNotesOpen = false;
           render();
           const restored = document.getElementById('captureInput');
           if (restored) restored.focus();
         };
-        input.addEventListener('keydown', ev => {
+        [ticketInput, input].forEach(field => field.addEventListener('keydown', ev => {
           if (ev.key === 'Enter') { ev.preventDefault(); doCapture(); }
-        });
+        }));
         submit.addEventListener('click', doCapture);
+        captureRow.appendChild(ticketInput);
         captureRow.appendChild(input);
         captureRow.appendChild(submit);
         capture.appendChild(captureRow);
-        capture.appendChild(el('p', { className: 'hint', text: 'Enter genügt. Priorität und Aufwand kommen später — unterbrich deinen Arbeitsfluss nicht.' }));
+        if (ui.captureNotesOpen) {
+          notesInput = el('textarea', { className: 'capture-notes', attrs: { id: 'captureNotes', placeholder: 'Notiz (optional)', 'aria-label': 'Notiz (optional)', maxlength: String(MAX_NOTES) } });
+          notesInput.addEventListener('keydown', ev => {
+            if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); doCapture(); }
+          });
+          capture.appendChild(notesInput);
+        } else {
+          capture.appendChild(button('+ Notiz', {
+            className: 'link-btn',
+            onClick: () => {
+              // Keep what was already typed across the re-render.
+              const keepTicket = ticketInput.value;
+              const keepTitle = input.value;
+              ui.captureNotesOpen = true;
+              render();
+              const t = document.getElementById('captureTicket');
+              const i = document.getElementById('captureInput');
+              if (t) t.value = keepTicket;
+              if (i) i.value = keepTitle;
+              const n = document.getElementById('captureNotes');
+              if (n) n.focus();
+            }
+          }));
+        }
+        capture.appendChild(el('p', { className: 'hint', text: 'Enter genügt — Ticket und Notiz sind optional, „ABC-123: Titel" wird automatisch aufgeteilt. Priorität kommt später, Aufwand ist optional.' }));
         frag.appendChild(capture);
 
         const tasks = inboxTasks();
@@ -4986,24 +5443,7 @@
           ]));
           leftoverPanel.appendChild(el('p', { className: 'hint', text: 'Diese Aufgaben sind in einer vergangenen Woche liegen geblieben. Mitnehmen zählt als Verschieben.' }));
           const list = el('div', { className: 'task-list' });
-          leftovers.forEach(task => {
-            const { card, main } = taskCardShell(task, now);
-            main.appendChild(el('div', { className: 'task-actions' }, [
-              el('span', { className: 'pill', text: shortWeek(task.plannedWeek) }),
-              button(`Mitnehmen nach ${shortWeek(ui.weekKey)}`, {
-                className: 'primary',
-                onClick: () => {
-                  const delta = Math.round((isoWeekStart(ui.weekKey) - isoWeekStart(task.plannedWeek)) / (7 * DAY_MS));
-                  carryOverTask(task.id, delta > 0 ? delta : 1);
-                }
-              }),
-              button('Erledigt', { className: 'good', onClick: () => completeTask(task.id) }),
-              editToggleButton(task),
-              button('Verwerfen', { className: 'ghost', onClick: () => dropTask(task.id) })
-            ]));
-            if (ui.editingTaskId === task.id) card.appendChild(renderEditPanel(task));
-            list.appendChild(card);
-          });
+          leftovers.forEach(task => list.appendChild(renderLeftoverCard(task, now)));
           leftoverPanel.appendChild(list);
           frag.appendChild(leftoverPanel);
         }
@@ -5051,7 +5491,7 @@
           [{ value: 'all', label: 'alle' }, ...PRIORITIES.map(p => ({ value: p.key, label: p.label }))],
           v => { ui.filterPriority = v; render(); }));
         filters.appendChild(makeSelect('Aufwand', ui.filterEffort,
-          [{ value: 'all', label: 'alle' }, ...EFFORTS.map(e => ({ value: e.key, label: e.label }))],
+          [{ value: 'all', label: 'alle' }, { value: 'none', label: 'ohne Angabe' }, ...EFFORTS.map(e => ({ value: e.key, label: e.label }))],
           v => { ui.filterEffort = v; render(); }));
         filters.appendChild(makeSelect('Kontext', ui.filterContext,
           [{ value: 'all', label: 'alle' }, ...usedContexts.map(c => ({ value: c, label: c }))],
@@ -5068,7 +5508,7 @@
 
         const tasks = all.filter(t =>
           (ui.filterPriority === 'all' || t.priority === ui.filterPriority) &&
-          (ui.filterEffort === 'all' || t.effort === ui.filterEffort) &&
+          (ui.filterEffort === 'all' || (ui.filterEffort === 'none' ? !t.effort : t.effort === ui.filterEffort)) &&
           (ui.filterContext === 'all' || t.context === ui.filterContext)
         );
 
@@ -5076,7 +5516,7 @@
         panel.appendChild(el('div', { className: 'panel-head' }, [
           el('h2', { text: `Backlog (${tasks.length}${tasks.length !== all.length ? ' von ' + all.length : ''})` })
         ]));
-        panel.appendChild(el('p', { className: 'hint', text: `„In ${shortWeek(ui.weekKey)}" plant in die Woche, die im Tab „Woche" gerade ausgewählt ist.` }));
+        panel.appendChild(el('p', { className: 'hint', text: `„→ ${shortWeek(ui.weekKey)}" plant in die Woche, die im Tab „Woche" gerade ausgewählt ist.` }));
         if (!tasks.length) {
           panel.appendChild(el('div', {
             className: 'empty',
@@ -5096,6 +5536,7 @@
         panel.appendChild(el('div', { className: 'panel-head' }, [
           el('h2', { text: `Archiv (${tasks.length})` })
         ]));
+        panel.appendChild(el('p', { className: 'hint', text: `Abgeschlossene Aufgaben werden ${ARCHIVE_RETENTION_DAYS} Tage nach Abschluss automatisch gelöscht. Backups behalten den älteren Stand.` }));
         if (!tasks.length) {
           panel.appendChild(el('div', { className: 'empty', text: 'Noch nichts abgeschlossen.' }));
           frag.appendChild(panel);
@@ -5144,6 +5585,62 @@
         banner.appendChild(box);
       }
 
+      const SEARCH_GROUPS = [
+        { label: 'Posteingang', match: t => t.status === 'inbox', card: (t, now) => renderInboxCard(t, now, { compact: true }) },
+        { label: 'Geplant', match: t => t.status === 'planned', card: (t, now) => renderPlannedCard(t, now, { draggable: false }) },
+        { label: 'Backlog', match: t => t.status === 'backlog', card: renderBacklogCard },
+        { label: 'Archiv', match: t => isTerminal(t.status), card: renderArchiveCard }
+      ];
+
+      function renderSearchView(now) {
+        const frag = document.createDocumentFragment();
+        const hits = state.tasks.filter(t => matchesSearch(t, ui.searchQuery));
+        const panel = el('section', { className: 'panel' });
+        panel.appendChild(el('div', { className: 'panel-head' }, [
+          el('h2', { text: `Suche: ${hits.length} Treffer` })
+        ]));
+        if (!hits.length) {
+          panel.appendChild(el('div', { className: 'empty', text: 'Keine Aufgabe gefunden.' }));
+        }
+        SEARCH_GROUPS.forEach(groupDef => {
+          const tasks = hits.filter(groupDef.match).sort((a, b) => b.updatedAt - a.updatedAt);
+          if (!tasks.length) return;
+          const group = el('div', { className: 'group' });
+          const head = el('div', { className: 'group-head' });
+          head.appendChild(el('span', { text: groupDef.label }));
+          head.appendChild(el('span', { className: 'group-count', text: `(${tasks.length})` }));
+          group.appendChild(head);
+          const list = el('div', { className: 'task-list' });
+          tasks.forEach(t => list.appendChild(groupDef.card(t, now)));
+          group.appendChild(list);
+          panel.appendChild(group);
+        });
+        frag.appendChild(panel);
+        return frag;
+      }
+
+      const searchInput = document.getElementById('taskSearch');
+
+      function clearSearch() {
+        ui.searchQuery = '';
+        if (searchInput) searchInput.value = '';
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          ui.searchQuery = searchInput.value.trim();
+          render();
+        });
+        searchInput.addEventListener('keydown', ev => {
+          if (ev.key === 'Escape' && searchInput.value) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            clearSearch();
+            render();
+          }
+        });
+      }
+
       function render() {
         // Detaching and re-appending #task-viewRoot's children below
         // collapses the page height for a moment, which makes the browser
@@ -5155,7 +5652,8 @@
         renderBackupBanner();
         clear(task_viewRoot);
         let content;
-        if (ui.tab === 'week') content = renderWeekView(now);
+        if (ui.searchQuery) content = renderSearchView(now);
+        else if (ui.tab === 'week') content = renderWeekView(now);
         else if (ui.tab === 'backlog') content = renderBacklogView(now);
         else if (ui.tab === 'archive') content = renderArchiveView(now);
         else content = renderInboxView(now);
@@ -5250,7 +5748,7 @@
       }
 
       function exportCsv() {
-        const header = ['Titel', 'Priorität', 'Aufwand', 'Status', 'Woche', 'Kontext', 'Story-Key', 'Verschoben', 'Erfasst', 'Abgeschlossen', 'Notiz'];
+        const header = ['Titel', 'Priorität', 'Aufwand', 'Status', 'Woche', 'Kontext', 'Ticket', 'Verschoben', 'Erfasst', 'Abgeschlossen', 'Notiz'];
         const rows = state.tasks.map(t => [
           t.title,
           priorityLabel(t.priority),
@@ -5271,8 +5769,10 @@
 
       function init() {
         loadState();
+        const purged = purgeOldArchive(Date.now());
         ui.backupDue = isBackupDue();
         render();
+        notifyPurge(purged);
         // Deferred one macrotask: buildBackupPayload() reads window.LWT.notes,
         // which is only defined once AppShell (the 4th script block) runs after this one.
         setTimeout(runDailyBackup, 0);
@@ -5290,11 +5790,12 @@
           if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tasks)) return 0;
           const incoming = parsed.tasks.filter(isValidTask).map(normalizeTask);
           state.tasks = incoming;
+          purgeOldArchive(Date.now());
           contexts = normalizeContexts([...contexts, ...(Array.isArray(parsed.contexts) ? parsed.contexts : [])]);
           saveState();
           saveContexts();
           render();
-          return incoming.length;
+          return state.tasks.length;
         },
         clearAllData: function () {
           state.tasks = [];
@@ -5309,8 +5810,8 @@
         getBackupStatus: () => ({ lastBackupDate: state.lastBackupDate, backupIntervalDays: state.backupIntervalDays }),
         runBackup,
         getTaskCount: () => state.tasks.length,
-        captureTask: function (title) {
-          const task = captureTask(title);
+        captureTask: function (title, extra) {
+          const task = captureTask(title, extra);
           if (task) render();
           return task;
         },
@@ -5437,7 +5938,7 @@
         var task = window.LWT.tasks.captureTask(quickCaptureInput.value);
         if (!task) { quickCaptureInput.focus(); return; }
         quickCaptureInput.value = '';
-        showToast('„' + task.title + '“ erfasst.', { variant: 'good' });
+        showToast((task.externalRef ? task.externalRef + ': ' : '') + '„' + task.title + '“ erfasst.', { variant: 'good' });
         quickCaptureInput.focus();
       }
       if (quickCaptureBtn) quickCaptureBtn.addEventListener('click', doQuickCapture);
