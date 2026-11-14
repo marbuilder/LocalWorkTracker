@@ -90,8 +90,12 @@
       --backdrop: rgba(5,7,12,.55);
 
       /* Typography */
-      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      /* Locally installed fonts only (no web fonts — CSP/no-dependency rule):
+         Inter if present, else the platform's modern UI face (SF Pro via
+         system-ui on macOS, Segoe UI Variable on Windows 11, Roboto). */
+      --font-sans: "Inter var", InterVariable, Inter, system-ui, -apple-system, BlinkMacSystemFont,
+                   "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       --fs-2xs: 11px;
       --fs-xs: 12px;
       --fs-sm: 13px;
@@ -164,6 +168,7 @@
       font-family: var(--font-sans);
       background: var(--body-gradient);
       color: var(--text);
+      font-feature-settings: "cv11", "ss01", "ss03"; /* Inter: single-storey a, open digits; ignored by other fonts */
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
@@ -950,6 +955,32 @@
     .dialog-actions button { width: auto; min-height: 38px; padding: 8px 16px; }
     .confirm-dialog .dialog-body { padding-top: 14px; }
     .confirm-dialog p { margin: 0; color: var(--text); }
+    /* Command menu (Ctrl/⌘+K, AppShell openCommandMenu) */
+    dialog.command-dialog { width: min(600px, calc(100vw - 24px)); margin-top: 12vh; padding: 0; overflow: hidden; }
+    .command-search { display: flex; align-items: center; gap: 10px; padding: 4px 16px; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .command-search .icon { font-size: var(--fs-xl); }
+    .command-search input { border: none; background: transparent; min-height: 52px; padding: 0; font-size: var(--fs-lg); }
+    .command-search input:focus { box-shadow: none; }
+    .command-list { list-style: none; margin: 0; padding: 6px; max-height: min(420px, 55vh); overflow-y: auto; }
+    .command-list li {
+      display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: var(--radius-md);
+      cursor: pointer; color: var(--text); font-size: var(--fs-base);
+    }
+    .command-list li .icon { color: var(--muted); }
+    .command-list li .cmd-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .command-list li .cmd-group { font-size: var(--fs-xs); color: var(--muted); }
+    .command-list li[aria-selected="true"] { background: var(--tone-accent-bg); }
+    .command-list li[aria-selected="true"] .icon { color: var(--accent); }
+    .command-list .cmd-empty { color: var(--muted); cursor: default; justify-content: center; }
+    .command-foot {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 14px;
+      border-top: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted);
+    }
+    .command-foot kbd {
+      padding: 1px 6px; border-radius: var(--radius-xs); border: 1px solid var(--border);
+      background: var(--panel-2); font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text);
+    }
+
     /* Pomodoro expiry: a full-screen, must-acknowledge overlay. */
     dialog.pomodoro-done { width: min(460px, 92vw); border: 2px solid var(--warn); box-shadow: var(--shadow-dialog); }
     dialog.pomodoro-done::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(2px); }
@@ -1148,6 +1179,7 @@
             <kbd>Alt + ←</kbd><span>Vortag</span>
             <kbd>Alt + →</kbd><span>Nächster Tag</span>
             <kbd>Alt + T</kbd><span>Heute</span>
+            <kbd>Ctrl/⌘ + K</kbd><span>Befehlsmenü</span>
           </div>
         </details>
       </div>
@@ -1471,6 +1503,16 @@
   </div>
 
   <div id="toastRoot" role="status" aria-live="polite" aria-atomic="false"></div>
+
+  <dialog id="commandDialog" class="command-dialog" aria-label="Befehlsmenü">
+    <div class="command-search">
+      <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+      <input id="commandInput" type="text" placeholder="Befehl suchen …" autocomplete="off" spellcheck="false"
+             role="combobox" aria-expanded="true" aria-controls="commandList" aria-autocomplete="list" maxlength="80">
+    </div>
+    <ul id="commandList" class="command-list" role="listbox" aria-label="Befehle"></ul>
+    <div class="command-foot" aria-hidden="true"><span><kbd>↑</kbd> <kbd>↓</kbd> auswählen</span><span><kbd>Enter</kbd> ausführen</span><span><kbd>Esc</kbd> schließen</span></div>
+  </dialog>
 
   <dialog id="pomodoroDoneDialog" class="pomodoro-done" aria-labelledby="pomodoroDoneTitle">
     <div class="pomodoro-done-body">
@@ -6378,6 +6420,138 @@
           if (window.LWT.notes) window.LWT.notes.clearAllData();
           showToast('Alle Daten gelöscht.', { variant: 'warn' });
           refreshBackupInfo();
+        });
+      }
+
+      /* ── Command menu (Ctrl/⌘+K) ─────────────────────────────── */
+      // Keyboard launcher over existing actions. Uses only the LWT.* surface
+      // and the centralized sticky-bar/header controls — no module internals.
+      var commandDialog = qs('commandDialog');
+      var commandInput = qs('commandInput');
+      var commandList = qs('commandList');
+      var commandItems = [];
+      var commandIndex = 0;
+
+      function focusLater(id) {
+        setTimeout(function () { var node = qs(id); if (node && !node.disabled) node.focus(); }, 0);
+      }
+      function clickControl(id) {
+        var node = qs(id);
+        if (node && !node.disabled && !node.hidden) node.click();
+      }
+      function buildCommands() {
+        var tracking = isTimeTrackingEnabled();
+        var active = tracking && window.LWT.time ? window.LWT.time.getActiveTimer() : null;
+        var cmds = [];
+        if (tracking) cmds.push({ group: 'Navigation', label: 'Zu „Zeit“ wechseln', icon: 'clock', keywords: 'tab zeiterfassung', run: function () { switchTab('time'); } });
+        cmds.push({ group: 'Navigation', label: 'Zu „Aufgaben“ wechseln', icon: 'tasks', keywords: 'tab todo', run: function () { switchTab('tasks'); } });
+        cmds.push({ group: 'Navigation', label: 'Zu „Einstellungen“ wechseln', icon: 'settings', keywords: 'tab daten backup export import', run: function () { switchTab('daten'); } });
+        cmds.push({ group: 'Aufgaben', label: 'Aufgabe erfassen', icon: 'inbox', keywords: 'neu capture posteingang', run: function () { focusLater('quickCaptureInput'); } });
+        cmds.push({ group: 'Aufgaben', label: 'Aufgaben durchsuchen', icon: 'search', keywords: 'suche finden', run: function () { switchTab('tasks'); focusLater('taskSearch'); } });
+        if (tracking) {
+          if (active) {
+            cmds.push({ group: 'Timer', label: 'Timer stoppen', icon: 'clock', keywords: 'stop beenden', run: function () { clickControl('stopBtn'); } });
+          } else {
+            cmds.push({ group: 'Timer', label: 'Timer starten …', icon: 'play', keywords: 'start ticket', run: function () { focusLater('ticketNumber'); } });
+          }
+          var focus = window.LWT.tasks ? window.LWT.tasks.focusTasks() : [];
+          focus.forEach(function (task) {
+            var label = (task.externalRef ? task.externalRef + ': ' : '') + task.title;
+            cmds.push({
+              group: 'Heute im Fokus', label: 'Timer starten: ' + label, icon: 'play', keywords: 'fokus heute',
+              run: function () {
+                window.LWT.time.startTimerFromTask(task.id, task.externalRef || task.title, task.externalRef ? task.title : '', '');
+                switchTab('time');
+              }
+            });
+          });
+        }
+        cmds.push({ group: 'Pomodoro', label: 'Pomodoro starten', icon: 'clock', keywords: 'fokus pause', run: function () { clickControl('pomodoroStartBtn'); } });
+        cmds.push({ group: 'Allgemein', label: 'Notizen öffnen', icon: 'note', keywords: 'notiz scratchpad', run: function () { focusLater('notesInput'); } });
+        cmds.push({ group: 'Allgemein', label: 'Farbschema wechseln', icon: 'moon', keywords: 'theme hell dunkel dark light', run: function () { clickControl('themeToggleBtn'); } });
+        if (window.LWT.tasks) cmds.push({ group: 'Allgemein', label: 'Backup jetzt herunterladen', icon: 'archive', keywords: 'sicherung export json', run: function () { window.LWT.tasks.runBackup(true); } });
+        return cmds;
+      }
+      // Every whitespace-separated term must occur in label, group or keywords.
+      function filterCommands(cmds, query) {
+        var terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.length) return cmds;
+        return cmds.filter(function (c) {
+          var hay = (c.label + ' ' + c.group + ' ' + (c.keywords || '')).toLowerCase();
+          return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+        });
+      }
+      function renderCommands() {
+        while (commandList.firstChild) commandList.removeChild(commandList.firstChild);
+        commandItems = filterCommands(buildCommands(), commandInput.value);
+        if (commandIndex >= commandItems.length) commandIndex = Math.max(0, commandItems.length - 1);
+        if (!commandItems.length) {
+          var none = document.createElement('li');
+          none.className = 'cmd-empty';
+          none.textContent = 'Kein Befehl gefunden.';
+          commandList.appendChild(none);
+          commandInput.removeAttribute('aria-activedescendant');
+          return;
+        }
+        commandItems.forEach(function (c, i) {
+          var li = document.createElement('li');
+          li.id = 'cmd-' + i;
+          li.setAttribute('role', 'option');
+          li.setAttribute('aria-selected', i === commandIndex ? 'true' : 'false');
+          li.appendChild(window.LWT.ui.icon(c.icon));
+          var label = document.createElement('span');
+          label.className = 'cmd-label';
+          label.textContent = c.label;
+          li.appendChild(label);
+          var group = document.createElement('span');
+          group.className = 'cmd-group';
+          group.textContent = c.group;
+          li.appendChild(group);
+          li.addEventListener('mousemove', function () { if (commandIndex !== i) { commandIndex = i; renderCommands(); } });
+          li.addEventListener('click', function () { runCommand(i); });
+          commandList.appendChild(li);
+        });
+        commandInput.setAttribute('aria-activedescendant', 'cmd-' + commandIndex);
+        var sel = qs('cmd-' + commandIndex);
+        if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+      }
+      function runCommand(i) {
+        var c = commandItems[i];
+        if (!c) return;
+        commandDialog.close();
+        c.run();
+      }
+      function openCommandMenu() {
+        if (!commandDialog || commandDialog.open) return;
+        if (document.querySelector('dialog[open]')) return; // never stack over a confirm/edit dialog
+        commandInput.value = '';
+        commandIndex = 0;
+        renderCommands();
+        commandDialog.showModal();
+        commandInput.focus();
+      }
+      if (commandDialog && commandInput && commandList) {
+        commandInput.addEventListener('input', function () { commandIndex = 0; renderCommands(); });
+        commandInput.addEventListener('keydown', function (ev) {
+          if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            if (!commandItems.length) return;
+            var step = ev.key === 'ArrowDown' ? 1 : -1;
+            commandIndex = (commandIndex + step + commandItems.length) % commandItems.length;
+            renderCommands();
+          } else if (ev.key === 'Enter') {
+            ev.preventDefault();
+            runCommand(commandIndex);
+          }
+        });
+        // Click on the backdrop (outside the dialog box) closes it.
+        commandDialog.addEventListener('click', function (ev) { if (ev.target === commandDialog) commandDialog.close(); });
+        document.addEventListener('keydown', function (ev) {
+          if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === 'k' || ev.key === 'K')) {
+            ev.preventDefault();
+            if (commandDialog.open) commandDialog.close();
+            else openCommandMenu();
+          }
         });
       }
     })();
