@@ -6,31 +6,60 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'">
   <title>LocalWorkTracker</title>
   <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #141b2d;
-      --panel-2: #0f1525;
-      --text: #ebeff8;
-      --muted: #9aa5bf;
-      --accent: #6aa9ff;
-      --good: #30c48d;
-      --warn: #ffb020;
-      --bad: #ff6b6b;
-      --border: #24304a;
-      --th-bg: #10182b;
-      --th-text: #c9d4ec;
-      --dialog-bg: #11192b;
-      --btn-bg: #1b2741;
-      --btn-bg-hover: #223050;
-      --row-stripe: rgba(255,255,255,.01);
-      --row-hover: rgba(255,255,255,.04);
-      --panel-shadow: rgba(0,0,0,.25);
-      --body-gradient: linear-gradient(180deg, var(--bg), #0f172a 35%, #0c1322 100%);
-      --current-bg: linear-gradient(180deg, rgba(36,86,184,.22), rgba(36,86,184,.10));
-      --current-border: rgba(106,169,255,.35);
-      --chart-fill: rgba(106,169,255,.82);
+    /* ══════════════════════════════════════════════════════════
+       Design tokens — one source for both themes. Every component
+       below reads these; theme switches only redefine tokens.
+       Declared on body as well as :root so composite tokens
+       (--shadow-panel, --body-gradient) re-resolve against the light
+       theme's overrides instead of inheriting the dark values.
+       ══════════════════════════════════════════════════════════ */
+    :root, body {
+      /* Surfaces & text */
+      --bg: #0b0d13;
+      --panel: #141720;
+      --panel-2: #0f121a;
+      --text: #e7e9f0;
+      --muted: #959cb0;
+      --accent: #8b9cff;
+      --accent-fg: #0b0d13;
+      --accent-soft: rgba(139,156,255,.22);
+      --good: #34d399;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --border: #242a38;
+      --th-bg: #11141c;
+      --th-text: #c5cadb;
+      --dialog-bg: #151922;
+      --btn-bg: #1c2130;
+      --btn-bg-hover: #252b3d;
+      --seg-active-bg: #272d40;
+      --row-stripe: rgba(255,255,255,.012);
+      --row-hover: rgba(139,156,255,.06);
+      --panel-shadow: rgba(0,0,0,.28);
+      --body-gradient: radial-gradient(1100px 520px at 0% -10%, rgba(99,102,241,.16), transparent 60%),
+                       radial-gradient(900px 480px at 100% -5%, rgba(56,189,248,.07), transparent 60%),
+                       var(--bg);
+      --current-bg: linear-gradient(180deg, rgba(99,102,241,.18), rgba(99,102,241,.08));
+      --current-border: rgba(139,156,255,.28);
+
+      /* Solid action buttons (.primary/.good/.warn/.bad, active chips) */
+      --btn-primary-bg: #4c56d8;  --btn-primary-hover: #5865f2;
+      --btn-good-bg: #047857;     --btn-good-hover: #059669;
+      --btn-warn-bg: #a16207;     --btn-warn-hover: #b45309;
+      --btn-bad-bg: #b91c1c;      --btn-bad-hover: #dc2626;
+      --btn-solid-fg: #fff;
+
+      /* Status pills — tinted background / text / border per tone */
+      --tone-good-bg: rgba(48,196,141,.15);   --tone-good-fg: #b8f0d8; --tone-good-border: rgba(48,196,141,.4);
+      --tone-warn-bg: rgba(255,176,32,.15);   --tone-warn-fg: #ffd699; --tone-warn-border: rgba(255,176,32,.42);
+      --tone-bad-bg: rgba(255,107,107,.15);   --tone-bad-fg: #ffb3b3;  --tone-bad-border: rgba(255,107,107,.45);
+      --tone-neutral-bg: rgba(154,165,191,.14); --tone-neutral-fg: #c3cbdf; --tone-neutral-border: rgba(154,165,191,.35);
+      --tone-accent-bg: rgba(139,156,255,.15); --tone-accent-fg: #c7cfff; --tone-accent-border: rgba(139,156,255,.42);
+
+      /* Chart (read by TimeModule's canvas renderer via getCssVar) */
+      --chart-fill: rgba(139,156,255,.85);
       --chart-grid: rgba(255,255,255,.08);
-      --chart-c1: rgba(106,169,255,.88);
+      --chart-c1: rgba(139,156,255,.9);
       --chart-c2: rgba(48,196,141,.88);
       --chart-c3: rgba(255,176,32,.88);
       --chart-c4: rgba(255,107,107,.88);
@@ -38,61 +67,184 @@
       --chart-c6: rgba(76,209,255,.88);
       --chart-c7: rgba(255,140,190,.88);
       --chart-c8: rgba(163,230,53,.88);
+
+      /* Spacing */
       --gap-outer: 24px;
       --gap-inner: 16px;
+
+      /* Radius */
+      --radius-xs: 4px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius: 10px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --radius-pill: 999px;
+
+      /* Elevation */
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+      --shadow-panel: inset 0 1px 0 rgba(255,255,255,.03), 0 8px 24px var(--panel-shadow);
+      --shadow-pop: 0 12px 32px rgba(0,0,0,.45);
+      --shadow-sticky: 0 10px 30px rgba(0,0,0,.35);
+      --shadow-dialog: 0 20px 60px rgba(0,0,0,.5);
+      --backdrop: rgba(5,7,12,.55);
+
+      /* Typography */
+      /* Locally installed fonts only (no web fonts — CSP/no-dependency rule):
+         Inter if present, else the platform's modern UI face (SF Pro via
+         system-ui on macOS, Segoe UI Variable on Windows 11, Roboto). */
+      --font-sans: "Inter var", InterVariable, Inter, system-ui, -apple-system, BlinkMacSystemFont,
+                   "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: "JetBrains Mono", "Cascadia Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --fs-2xs: 11px;
+      --fs-xs: 12px;
+      --fs-sm: 13px;
+      --fs-base: 14px;
+      --fs-md: 15px;
+      --fs-lg: 16px;
+      --fs-xl: 18px;
+      --fs-2xl: 24px;
+      --fs-3xl: 28px;
+
+      /* Motion */
+      --ease: cubic-bezier(.2, .7, .3, 1);
+      --dur-fast: .08s;
+      --dur: .16s;
     }
     body[data-theme="light"] {
-      --bg: #f3f5fa;
+      --bg: #f5f6fa;
       --panel: #ffffff;
-      --panel-2: #f0f2f8;
-      --text: #0f172a;
-      --muted: #4a5572;
-      --accent: #2456b8;
-      --border: #d6dbe6;
-      --th-bg: #e8ecf5;
-      --th-text: #324070;
+      --panel-2: #f4f5f9;
+      --text: #111827;
+      --muted: #5b6478;
+      --accent: #4f46e5;
+      --accent-fg: #ffffff;
+      --accent-soft: rgba(79,70,229,.18);
+      --good: #15803d;
+      --warn: #b45309;
+      --bad: #dc2626;
+      --border: #e3e6ee;
+      --th-bg: #f4f5f9;
+      --th-text: #374151;
       --dialog-bg: #ffffff;
-      --btn-bg: #e6eaf3;
-      --btn-bg-hover: #d9deeb;
-      --row-stripe: rgba(0,0,0,.02);
-      --row-hover: rgba(36,86,184,.06);
-      --panel-shadow: rgba(15,23,42,.08);
-      --body-gradient: linear-gradient(180deg, #f5f7fb, #eef1f8 35%, #e7ebf4 100%);
-      --current-bg: linear-gradient(180deg, rgba(36,86,184,.10), rgba(36,86,184,.04));
-      --current-border: rgba(36,86,184,.30);
+      --btn-bg: #f1f3f8;
+      --btn-bg-hover: #e6e9f1;
+      --seg-active-bg: #ffffff;
+      --row-stripe: rgba(17,24,39,.015);
+      --row-hover: rgba(79,70,229,.05);
+      --panel-shadow: rgba(16,24,40,.05);
+      --body-gradient: radial-gradient(1100px 520px at 0% -10%, rgba(99,102,241,.08), transparent 60%),
+                       radial-gradient(900px 480px at 100% -5%, rgba(56,189,248,.06), transparent 60%),
+                       var(--bg);
+      --current-bg: linear-gradient(180deg, rgba(79,70,229,.08), rgba(79,70,229,.03));
+      --current-border: rgba(79,70,229,.22);
+      --shadow-sm: 0 1px 2px rgba(16,24,40,.08);
+      --shadow-panel: 0 1px 2px rgba(16,24,40,.04), 0 4px 16px var(--panel-shadow);
+      --shadow-pop: 0 12px 32px rgba(16,24,40,.14);
+      --shadow-sticky: 0 8px 24px rgba(16,24,40,.10);
+      --chart-fill: rgba(79,70,229,.8);
+      --chart-c1: rgba(79,70,229,.85);
+
+      --btn-primary-bg: #4f46e5;  --btn-primary-hover: #4338ca;
+      --btn-good-bg: #15803d;     --btn-good-hover: #166534;
+      --btn-warn-bg: #b45309;     --btn-warn-hover: #92400e;
+      --btn-bad-bg: #dc2626;      --btn-bad-hover: #b91c1c;
+
+      --tone-good-bg: rgba(19,108,75,.12);   --tone-good-fg: #0e6a48; --tone-good-border: rgba(19,108,75,.45);
+      --tone-warn-bg: rgba(178,113,0,.12);   --tone-warn-fg: #8a5a00; --tone-warn-border: rgba(178,113,0,.45);
+      --tone-bad-bg: rgba(207,64,64,.12);    --tone-bad-fg: #a12c2c;  --tone-bad-border: rgba(207,64,64,.45);
+      --tone-neutral-bg: rgba(74,85,114,.10); --tone-neutral-fg: #4a5572; --tone-neutral-border: rgba(74,85,114,.32);
+      --tone-accent-bg: rgba(79,70,229,.10); --tone-accent-fg: #4338ca; --tone-accent-border: rgba(79,70,229,.35);
+
       --chart-grid: rgba(0,0,0,.08);
     }
+
+    /* ══════════════════════════════════════════════════════════
+       Base
+       ══════════════════════════════════════════════════════════ */
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-sans);
       background: var(--body-gradient);
       color: var(--text);
+      font-feature-settings: "cv11", "ss01", "ss03"; /* Inter: single-storey a, open digits; ignored by other fonts */
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-    .container { max-width: 1380px; margin: 0 auto; padding: 20px; display: flex; flex-direction: column; gap: var(--gap-outer); }
-    .app-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--gap-outer); }
-    .app-head h1 { flex: 1; }
-    #themeToggleBtn {
-      width: auto; min-height: 36px; padding: 6px 12px; font-size: 18px; line-height: 1;
-      border-radius: 999px; background: var(--btn-bg);
-    }
-    h1, h2, h3 { margin: 0 0 12px; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+    h1, h2, h3 { margin: 0 0 12px; letter-spacing: -.01em; }
     p { color: var(--muted); }
+    .muted { color: var(--muted); }
+    .tnum { font-variant-numeric: tabular-nums; }
+    /* Inline SVG icons (sprite #iconSprite, helper LWT.ui.icon). Sized in em
+       so they follow the surrounding font size. */
+    .icon {
+      width: 1.15em; height: 1.15em; flex: 0 0 auto; vertical-align: -0.2em;
+      fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+    button > .icon:only-child { vertical-align: middle; }
+    .app-logo {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--btn-primary-hover), var(--btn-primary-bg));
+      color: #fff; box-shadow: var(--shadow-sm); font-size: var(--fs-xl);
+    }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    .container { max-width: 1380px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: var(--gap-outer); }
+    /* Title | main tabs | actions on one row (wraps to two rows ≤700px). */
+    .app-head {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center; gap: var(--gap-inner);
+    }
+    .app-head h1 {
+      margin: 0; font-size: var(--fs-xl); font-weight: 700; letter-spacing: -.02em;
+      display: inline-flex; align-items: center; gap: 10px; white-space: nowrap;
+    }
+    .app-head-actions { display: flex; gap: 8px; align-items: center; justify-self: end; }
+    #themeToggleBtn {
+      width: 38px; min-height: 38px; height: 38px; padding: 0; font-size: var(--fs-xl); line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-pill); background: var(--btn-bg); border-color: var(--border);
+    }
     .grid { display: grid; gap: var(--gap-outer); grid-template-columns: 1fr 1fr; }
     .grid .span-all { grid-column: 1 / -1; }
     .panel {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: 0 10px 30px var(--panel-shadow);
+      border-radius: var(--radius-xl);
+      padding: 20px 22px;
+      box-shadow: var(--shadow-panel);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
     .panel.full { grid-column: 1 / -1; }
+    /* The panel's own flex gap handles vertical rhythm, so the shared
+       heading/paragraph margins would double up on it. */
+    .panel > * { margin-top: 0; margin-bottom: 0; }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .panel-head h2 { margin: 0; font-size: var(--fs-xl); }
+    .tab-panel { display: flex; flex-direction: column; gap: var(--gap-outer); }
+    .tab-panel[hidden] { display: none; }
+    /* Panels are appended straight into #task-viewRoot, so the spacing
+       between them lives here — the container gap only separates its own
+       four children. */
+    #task-viewRoot { display: flex; flex-direction: column; gap: var(--gap-outer); }
+    .app-footer {
+      font-size: var(--fs-xs); color: var(--muted); text-align: center;
+      padding-top: 4px; border-top: 1px solid var(--border);
+    }
+
+    /* ── Form grid ─────────────────────────────────────────────── */
     .row {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
-      gap: var(--gap-inner);
+      gap: 10px;
       align-items: end;
       margin-bottom: 10px;
     }
@@ -101,123 +253,201 @@
     .field.s4 { grid-column: span 4; }
     .field.s5 { grid-column: span 5; }
     .field.s6 { grid-column: span 6; }
+    .field.s9 { grid-column: span 9; }
     .field.s12 { grid-column: span 12; }
     label {
       display: block;
-      font-size: 13px;
+      font-size: var(--fs-sm);
       color: var(--muted);
       margin-bottom: 6px;
     }
     input, select, button, textarea {
       width: 100%;
       min-height: 40px;
-      border-radius: 10px;
+      border-radius: var(--radius);
       border: 1px solid var(--border);
       background: var(--panel-2);
       color: var(--text);
       padding: 10px 12px;
       font: inherit;
     }
+    input, select, textarea { transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
+    input:hover, select:hover, textarea:hover { border-color: color-mix(in srgb, var(--muted) 45%, var(--border)); }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    input[type="checkbox"], input[type="radio"] { width: auto; min-height: 0; accent-color: var(--accent); }
+    input[type="checkbox"]:focus, input[type="radio"]:focus { box-shadow: none; }
+    ::placeholder { color: var(--muted); opacity: .8; }
     textarea { min-height: 84px; resize: vertical; }
+    input[aria-invalid="true"],
+    textarea[aria-invalid="true"],
+    select[aria-invalid="true"] {
+      border-color: var(--bad);
+    }
+    .field-error { margin-top: 4px; font-size: var(--fs-xs); color: var(--bad); }
+    .hint { font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; margin: 6px 0 0; }
+
+    /* ── Buttons ───────────────────────────────────────────────── */
     button {
       cursor: pointer;
       background: var(--btn-bg);
-      transition: transform .08s ease, opacity .15s ease, background .15s ease;
+      font-weight: 500;
+      transition: transform var(--dur-fast) var(--ease), opacity var(--dur) var(--ease),
+                  background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+                  color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
     }
+    button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); border-color: var(--accent); }
     button:hover { background: var(--btn-bg-hover); }
     button:active { transform: translateY(1px); }
-    button.primary { background: #2456b8; color: #fff; }
-    button.good { background: #136c4b; color: #fff; }
-    button.warn { background: #8f6111; color: #fff; }
-    button.bad { background: #7f2c2c; color: #fff; }
-    body[data-theme="light"] button.primary { background: #2456b8; color: #fff; }
-    body[data-theme="light"] button.primary:hover { background: #1d4699; }
-    body[data-theme="light"] button.good { background: #15875a; color: #fff; }
-    body[data-theme="light"] button.good:hover { background: #117049; }
-    body[data-theme="light"] button.warn { background: #d18a2e; color: #fff; }
-    body[data-theme="light"] button.warn:hover { background: #b67422; }
-    body[data-theme="light"] button.bad { background: #cf4040; color: #fff; }
-    body[data-theme="light"] button.bad:hover { background: #b03333; }
+    button.primary, button.good, button.warn, button.bad {
+      color: var(--btn-solid-fg); border-color: transparent; box-shadow: var(--shadow-sm);
+    }
+    button.primary { background: var(--btn-primary-bg); }
+    button.good { background: var(--btn-good-bg); }
+    button.warn { background: var(--btn-warn-bg); }
+    button.bad { background: var(--btn-bad-bg); }
+    button.primary:hover { background: var(--btn-primary-hover); }
+    button.good:hover { background: var(--btn-good-hover); }
+    button.warn:hover { background: var(--btn-warn-hover); }
+    button.bad:hover { background: var(--btn-bad-hover); }
     button.ghost { background: transparent; border-color: var(--border); }
+    button.ghost:hover { background: var(--btn-bg); }
+    button:disabled { cursor: not-allowed; opacity: .55; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
-    .day-nav {
-      display: grid;
-      grid-template-columns: auto auto minmax(180px, 220px) auto;
-      gap: 8px;
-      align-items: end;
-      margin-bottom: 10px;
+
+    /* ── Tab bar ───────────────────────────────────────────────── */
+    /* Segmented control: a recessed track with the active tab raised. */
+    .tabbar {
+      display: inline-flex; gap: 2px; overflow-x: auto; max-width: 100%;
+      padding: 3px; border-radius: var(--radius-pill);
+      background: var(--panel-2); border: 1px solid var(--border);
+      scrollbar-width: none;
     }
-    .panel-head {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; margin-bottom: 10px; flex-wrap: wrap;
+    .tabbar::-webkit-scrollbar { display: none; }
+    .tabbar button {
+      width: auto; min-height: 34px; padding: 6px 16px;
+      border-radius: var(--radius-pill); background: transparent; border-color: transparent;
+      color: var(--muted); font-weight: 600;
+      white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     }
-    .panel-head h2 { margin: 0; }
-    .view-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .tabbar button:hover { background: transparent; color: var(--text); }
+    .tabbar button.active { background: var(--seg-active-bg); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }
+    .tabbar button[hidden] { display: none; }
+    .tab-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
+      background: var(--btn-bg-hover); color: var(--text);
+      font-size: var(--fs-xs); font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .tabbar button.active .tab-badge { background: var(--tone-accent-bg); color: var(--accent); }
+    .tab-badge.over, .tabbar button.active .tab-badge.over { background: var(--tone-warn-bg); color: var(--warn); }
+    #mainTabbar button { padding: 6px 18px; font-size: var(--fs-base); }
+
+    /* ── Segmented toggles & chips ─────────────────────────────── */
+    .view-toggle { display: inline-flex; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-pill); }
     .view-toggle button {
-      width: auto; min-height: 32px; padding: 4px 14px;
-      border-radius: 0; border: none; background: transparent; color: var(--muted);
-      font-size: 13px;
+      width: auto; min-height: 28px; padding: 3px 14px;
+      border-radius: var(--radius-pill); border: 1px solid transparent; background: transparent; color: var(--muted);
+      font-size: var(--fs-sm); font-weight: 600;
     }
-    .view-toggle button.active { background: var(--accent); color: #fff; }
+    .view-toggle button:hover { background: transparent; color: var(--text); }
+    .view-toggle button.active { background: var(--seg-active-bg); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }
+    .range-chips {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin: 0 0 14px;
+    }
+    .range-chips button, .chips button {
+      width: auto; min-height: 32px; padding: 4px 12px;
+      font-size: var(--fs-sm); border-radius: var(--radius-pill);
+      background: var(--btn-bg); border-color: var(--border);
+    }
+    .range-chips button:hover, .chips button:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+    .range-chips button.active, .chips button.active {
+      background: var(--tone-accent-bg); color: var(--tone-accent-fg); border-color: var(--tone-accent-border);
+    }
+    .chip-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .chip-group > .chip-label { font-size: var(--fs-xs); color: var(--muted); min-width: 68px; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chips button.active.prio-zero, .chips button.active.effort-toolarge {
+      background: var(--tone-bad-bg); color: var(--tone-bad-fg); border-color: var(--tone-bad-border);
+    }
+    .chips button.active.prio-eighty, .chips button.active.effort-tbd {
+      background: var(--tone-warn-bg); color: var(--tone-warn-fg); border-color: var(--tone-warn-border);
+    }
+
+    /* ── Pills ─────────────────────────────────────────────────── */
+    .pill {
+      display: inline-flex; gap: 6px; align-items: center;
+      background: var(--panel); color: var(--muted);
+      border: 1px solid var(--border); border-radius: var(--radius-pill);
+      padding: 3px 10px; font-size: var(--fs-xs); font-weight: 600;
+      white-space: nowrap;
+    }
+    .pill.pending { background: var(--tone-warn-bg); color: var(--tone-warn-fg); border-color: var(--tone-warn-border); }
+    #pomodoroPill, #currentTimerStatus .pill:not(.pending) {
+      background: var(--tone-good-bg); color: var(--tone-good-fg); border-color: var(--tone-good-border);
+    }
+    .pill.prio-zero { background: var(--tone-bad-bg); color: var(--tone-bad-fg); border-color: var(--tone-bad-border); }
+    .pill.prio-eighty { background: var(--tone-warn-bg); color: var(--tone-warn-fg); border-color: var(--tone-warn-border); }
+    .pill.prio-nice { background: var(--tone-neutral-bg); color: var(--tone-neutral-fg); border-color: var(--tone-neutral-border); }
+    .pill.state-done { background: var(--tone-good-bg); color: var(--tone-good-fg); border-color: var(--tone-good-border); }
+    .pill.state-dropped { background: var(--tone-neutral-bg); color: var(--tone-neutral-fg); border-color: var(--tone-neutral-border); }
+    .pill.state-escalated { background: var(--tone-accent-bg); color: var(--tone-accent-fg); border-color: var(--tone-accent-border); }
+
+    /* ── Tables ────────────────────────────────────────────────── */
+    table {
+      width: 100%; border-collapse: collapse; overflow: hidden;
+      border-radius: var(--radius-lg); border: 1px solid var(--border);
+    }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { background: var(--th-bg); color: var(--th-text); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    tr:nth-child(even) td { background: var(--row-stripe); }
+    tbody tr:hover td { background: var(--row-hover); }
+    tfoot td {
+      font-weight: 700; background: var(--th-bg); color: var(--th-text);
+      border-top: 2px solid var(--border);
+    }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .actions button { width: auto; min-height: 34px; padding: 6px 10px; font-size: var(--fs-sm); }
+    .summary-table td:first-child, .summary-table th:first-child { width: 18%; }
     .week-pivot th, .week-pivot td { white-space: nowrap; }
     .week-pivot td.tnum, .week-pivot th.tnum { text-align: right; }
     .week-pivot td.col-ticket, .week-pivot th.col-ticket { text-align: left; min-width: 140px; }
     .week-pivot td.weekend { background: var(--row-stripe); }
     .week-pivot tfoot td { background: var(--th-bg); color: var(--th-text); }
-    .range-chips {
-      display: flex; flex-wrap: wrap; gap: 6px;
-      margin: 0 0 14px;
-    }
-    .range-chips button {
-      width: auto; min-height: 32px; padding: 4px 12px;
-      font-size: 13px; border-radius: 999px;
-      background: var(--btn-bg); border-color: var(--border);
-    }
-    .range-chips button.active {
-      background: var(--accent); color: #fff; border-color: var(--accent);
-    }
-    tfoot td {
-      font-weight: 700; background: var(--th-bg); color: var(--th-text);
-      border-top: 2px solid var(--border);
-    }
+
+    /* ── Popovers (native <details>) ───────────────────────────── */
     .shortcut-help {
       display: inline-flex; align-items: center; gap: 6px;
-      font-size: 13px; color: var(--muted);
+      font-size: var(--fs-sm); color: var(--muted);
       position: relative;
     }
     .shortcut-help[hidden] { display: none; }
-    .shortcut-help summary { cursor: pointer; list-style: none; padding: 4px 8px; border-radius: 8px; }
+    .shortcut-help summary { cursor: pointer; list-style: none; padding: 6px 8px; border-radius: var(--radius-md); font-size: var(--fs-xl); line-height: 1; display: inline-flex; }
+    .shortcut-help summary:hover { color: var(--text); background: var(--btn-bg); }
     .shortcut-help summary::-webkit-details-marker { display: none; }
     .shortcut-help[open] summary { background: var(--btn-bg); }
     .shortcut-help kbd {
-      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      display: inline-block; padding: 1px 6px; border-radius: var(--radius-xs);
       background: var(--panel-2); border: 1px solid var(--border);
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 12px; color: var(--text);
+      font-family: var(--font-mono);
+      font-size: var(--fs-xs); color: var(--text);
     }
     .shortcut-help .shortcut-list {
       position: absolute; top: 100%; right: 0; margin-top: 6px;
       padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
-      border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
+      border-radius: var(--radius); box-shadow: var(--shadow-pop);
       display: grid; grid-template-columns: auto 1fr; gap: 6px 12px;
-      font-size: 13px; z-index: 10; white-space: nowrap;
+      font-size: var(--fs-sm); z-index: 10; white-space: nowrap;
     }
-    .ticket-row {
-      display: grid; gap: 8px;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 200px);
-      align-items: stretch;
-    }
-    .ticket-row.ticket-row-split {
-      grid-template-columns: minmax(0, 150px) minmax(0, 1fr) minmax(0, 190px);
-    }
-    .ticket-row select { font-size: 14px; }
-    .ticket-help { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.35; }
     .field-label-row { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
     .field-label-row label { margin-bottom: 0; }
     .field-info { position: relative; flex-shrink: 0; }
     .field-info summary {
       list-style: none; cursor: pointer;
-      font-size: 11px; font-weight: 700; color: var(--muted);
+      font-size: var(--fs-2xs); font-weight: 700; color: var(--muted);
       width: 16px; height: 16px;
       display: flex; align-items: center; justify-content: center;
       border-radius: 50%; border: 1px solid var(--border);
@@ -229,167 +459,13 @@
       position: absolute; left: 0; top: calc(100% + 6px);
       min-width: 230px; max-width: 280px;
       padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
-      border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
-      font-size: 12px; color: var(--text); line-height: 1.55;
+      border-radius: var(--radius); box-shadow: var(--shadow-pop);
+      font-size: var(--fs-xs); color: var(--text); line-height: 1.55;
       z-index: 30;
     }
     .field-info .field-info-tip b { color: var(--accent); }
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap-inner); }
-    .stat { padding: 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; }
-    .stat .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .stat .label { color: var(--muted); font-size: 13px; }
-    .current {
-      display: flex; justify-content: space-between; gap: 12px; align-items: center;
-      padding: 12px 16px; background: var(--current-bg);
-      border: 1px solid var(--current-border); border-radius: 12px;
-      backdrop-filter: saturate(140%) blur(6px);
-      -webkit-backdrop-filter: saturate(140%) blur(6px);
-    }
-    .current-row.sticky-bar {
-      position: sticky; top: 8px; z-index: 5;
-    }
-    .current-row.sticky-bar .current {
-      box-shadow: 0 8px 24px rgba(0,0,0,.18);
-    }
-    .current .live-duration {
-      font-size: 28px; font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: 0.5px;
-    }
-    .current-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 12px;
-    }
-    .current-side { display: flex; flex-direction: column; gap: 12px; justify-content: space-between; min-width: 0; }
-    .current-side > #currentTimer,
-    .current-side > #notesWidget { flex: 1 1 auto; }
-    /* .current's backdrop-filter creates a stacking context on every element with that class;
-       without an explicit z-index here, #pomodoroBar (later in the DOM, same auto z-index)
-       paints on top of #currentTimer's own popovers (.field-info-tip) when they overflow past
-       its box, clipping them visually. */
-    #currentTimer { position: relative; z-index: 2; }
-    #currentTimer[hidden] { display: none; }
-    .current-compact {
-      flex-direction: column; align-items: stretch; justify-content: space-between;
-    }
-    .current-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-    .current-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .ticket-input-compact { width: auto; flex: 1 1 140px; min-width: 120px; min-height: 36px; padding: 6px 10px; font-size: 14px; }
-    .ticket-preset-compact { width: auto; max-width: 120px; min-height: 36px; padding: 6px 8px; font-size: 13px; }
-    .time-input-compact { width: auto; min-width: 90px; min-height: 36px; padding: 6px 8px; font-size: 13px; }
-    .current-time-info summary { width: 22px; height: 22px; font-size: 13px; }
-    .current-notes-popover summary {
-      width: auto; height: auto; border-radius: 8px;
-      padding: 6px 10px; font-size: 13px; font-weight: 600;
-    }
-    .current-notes-tip { min-width: 220px; }
-    .current-notes-tip label { margin-bottom: 4px; }
-    .current-notes-tip textarea { min-height: 70px; }
-    .current-toolbar { margin: 0; gap: 8px; }
-    .current-toolbar button { width: auto; min-height: 36px; padding: 6px 16px; }
-    .pomodoro-bar { flex-wrap: wrap; }
-    .pomodoro-count { min-width: 168px; text-align: right; }
-    .pomodoro-info { display: flex; flex-direction: column; gap: 8px; }
-    .pomodoro-controls { display: flex; gap: 8px; align-items: center; }
-    .pomodoro-controls select { width: auto; min-height: 36px; }
-    .quick-capture .capture-row { grid-template-columns: minmax(0, 1fr) minmax(0, 110px); width: 100%; }
-    .pomodoro-buttons { display: flex; gap: 8px; }
-    .pomodoro-buttons button { width: auto; min-height: 36px; }
-    .pomodoro-controls select:disabled,
-    .pomodoro-buttons button:disabled {
-      opacity: .5; cursor: not-allowed;
-    }
-    .notes-widget {
-      flex-direction: column; align-items: stretch; gap: 8px;
-      min-height: 132px;
-    }
-    .notes-head {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      flex: 0 0 auto;
-    }
-    .notes-title {
-      margin: 0; font-size: 13px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: .04em;
-    }
-    .notes-status { font-size: 12px; white-space: nowrap; }
-    .notes-input {
-      flex: 1 1 0; min-height: 0; resize: none;
-      padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px;
-      background: var(--panel-2); color: var(--text);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 13px; line-height: 1.5;
-    }
-    .pill {
-      display: inline-flex; gap: 8px; align-items: center;
-      background: rgba(48,196,141,.15); color: #b8f0d8;
-      border: 1px solid rgba(48,196,141,.35); border-radius: 999px; padding: 6px 10px; font-size: 13px;
-      font-weight: 600;
-    }
-    body[data-theme="light"] .pill {
-      background: rgba(19,108,75,.12);
-      color: #0e6a48;
-      border-color: rgba(19,108,75,.45);
-    }
-    .pill.pending {
-      background: rgba(255,176,32,.15);
-      color: #ffd699;
-      border-color: rgba(255,176,32,.4);
-    }
-    #pomodoroPill, #currentTimerStatus .pill:not(.pending) {
-      background: rgba(48,196,141,.15); color: #b8f0d8; border-color: rgba(48,196,141,.35);
-    }
-    body[data-theme="light"] #pomodoroPill, body[data-theme="light"] #currentTimerStatus .pill:not(.pending) {
-      background: rgba(19,108,75,.12); color: #0e6a48; border-color: rgba(19,108,75,.45);
-    }
-    body[data-theme="light"] .pill.pending {
-      background: rgba(178,113,0,.12);
-      color: #8a5a00;
-      border-color: rgba(178,113,0,.4);
-    }
-    .muted { color: var(--muted); }
-    table {
-      width: 100%; border-collapse: collapse; overflow: hidden;
-      border-radius: 12px; border: 1px solid var(--border);
-    }
-    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    th { background: var(--th-bg); color: var(--th-text); font-size: 13px; }
-    tr:nth-child(even) td { background: var(--row-stripe); }
-    tbody tr:hover td { background: var(--row-hover); }
-    .tnum { font-variant-numeric: tabular-nums; }
-    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .actions button { width: auto; min-height: 34px; padding: 6px 10px; font-size: 13px; }
-    .summary-table td:first-child, .summary-table th:first-child { width: 18%; }
-    .ticket-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-    .copy-btn {
-      width: 24px; height: 24px; min-height: 0; padding: 0; margin-left: 2px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: transparent; border: 1px solid transparent; color: var(--muted);
-      border-radius: 6px; font-size: 13px; line-height: 1; flex-shrink: 0;
-      vertical-align: middle;
-    }
-    .copy-btn:hover { color: var(--accent); background: var(--row-hover); border-color: var(--border); }
-    .summary-desc-more { margin-left: 4px; }
-    .ticket-copy-label {
-      cursor: pointer; border-bottom: 1px dashed var(--muted); padding-bottom: 1px;
-      border-radius: 2px;
-    }
-    .ticket-copy-label:hover { color: var(--accent); border-bottom-color: var(--accent); }
-    .ticket-copy-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    dialog {
-      width: min(780px, calc(100vw - 24px)); border: 1px solid var(--border);
-      border-radius: 14px; background: var(--dialog-bg); color: var(--text); padding: 0;
-    }
-    dialog::backdrop { background: rgba(0,0,0,.55); }
-    .dialog-head, .dialog-body, .dialog-foot { padding: 16px; }
-    .dialog-head { border-bottom: 1px solid var(--border); }
-    .dialog-foot { border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
-    .empty {
-      padding: 18px; border: 1px dashed var(--border); border-radius: 12px;
-      color: var(--muted); background: var(--panel-2);
-    }
     .compact-menu {
-      width: 100%; border: 1px solid var(--border); border-radius: 12px;
+      width: 100%; border: 1px solid var(--border); border-radius: var(--radius-lg);
       background: var(--panel-2); overflow: hidden; margin-bottom: 14px;
     }
     .compact-menu summary {
@@ -400,284 +476,231 @@
     .compact-menu summary::after { content: "▾"; float: right; color: var(--muted); }
     .compact-menu[open] summary::after { content: "▴"; }
     .compact-inner { padding: 0 12px 12px; border-top: 1px solid var(--border); }
-    .compact-hint { margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+    .compact-hint { margin: 0 0 12px; font-size: var(--fs-sm); color: var(--muted); }
+
+    /* ══════════════════════════════════════════════════════════
+       Sticky bar (#quickCapture, #currentTimer, #pomodoroBar, #notesWidget)
+       ══════════════════════════════════════════════════════════ */
+    .current {
+      display: flex; justify-content: space-between; gap: 12px; align-items: center;
+      padding: 12px 16px;
+      background: var(--current-bg);
+      background-color: color-mix(in srgb, var(--panel) 80%, transparent);
+      border: 1px solid var(--current-border); border-radius: var(--radius-lg);
+      backdrop-filter: saturate(160%) blur(14px);
+      -webkit-backdrop-filter: saturate(160%) blur(14px);
+    }
+    .current-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+    }
+    /* overflow-anchor: none keeps the browser from choosing a node inside
+       the sticky bar (which moves with the scroll) as its scroll anchor.
+       applyStickyState() additionally disables anchoring document-wide
+       while it collapses/expands the bar — see the comment there. */
+    .current-row.sticky-bar { position: sticky; top: 8px; z-index: 5; overflow-anchor: none; }
+    .current-row.sticky-bar .current { box-shadow: var(--shadow-sticky); }
+    .current .live-duration {
+      font-size: var(--fs-3xl); font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.01em;
+    }
+    .current-side { display: flex; flex-direction: column; gap: 12px; justify-content: space-between; min-width: 0; }
+    .current-side > #currentTimer,
+    .current-side > #notesWidget { flex: 1 1 auto; }
+    /* .current's backdrop-filter creates a stacking context on every element with that class;
+       without an explicit z-index here, #pomodoroBar (later in the DOM, same auto z-index)
+       paints on top of #currentTimer's own popovers (.field-info-tip) when they overflow past
+       its box, clipping them visually. */
+    #currentTimer { position: relative; z-index: 2; }
+    #currentTimer[hidden] { display: none; }
+    .current-compact { flex-direction: column; align-items: stretch; justify-content: space-between; }
+    .current-status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .current-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .ticket-row {
+      display: grid; gap: 8px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 200px);
+      align-items: stretch;
+    }
+    .ticket-row.ticket-row-split { grid-template-columns: minmax(0, 150px) minmax(0, 1fr) minmax(0, 190px); }
+    .ticket-row select { font-size: var(--fs-base); }
+    .ticket-help { margin-top: 4px; font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
+    .ticket-input-compact { width: auto; flex: 1 1 140px; min-width: 120px; min-height: 36px; padding: 6px 10px; font-size: var(--fs-base); }
+    .ticket-preset-compact { width: auto; max-width: 120px; min-height: 36px; padding: 6px 8px; font-size: var(--fs-sm); }
+    .time-input-compact { width: auto; min-width: 90px; min-height: 36px; padding: 6px 8px; font-size: var(--fs-sm); }
+    .current-time-info summary { width: 22px; height: 22px; font-size: var(--fs-sm); }
+    .current-notes-popover summary {
+      width: auto; height: auto; border-radius: var(--radius-md);
+      padding: 6px 10px; font-size: var(--fs-sm); font-weight: 600;
+    }
+    .current-notes-tip { min-width: 220px; }
+    .current-notes-tip label { margin-bottom: 4px; }
+    .current-notes-tip textarea { min-height: 70px; }
+    .current-toolbar { margin: 0; gap: 8px; }
+    .current-toolbar button { width: auto; min-height: 36px; padding: 6px 16px; }
+    .quick-capture .capture-row { grid-template-columns: minmax(0, 1fr) minmax(0, 110px); width: 100%; }
+    .pomodoro-bar { flex-wrap: wrap; }
+    .pomodoro-count { min-width: 168px; text-align: right; }
+    .pomodoro-info { display: flex; flex-direction: column; gap: 8px; }
+    .pomodoro-controls { display: flex; gap: 8px; align-items: center; }
+    .pomodoro-controls select { width: auto; min-height: 36px; }
+    .pomodoro-buttons { display: flex; gap: 8px; }
+    .pomodoro-buttons button { width: auto; min-height: 36px; }
+    .pomodoro-controls select:disabled,
+    .pomodoro-buttons button:disabled { opacity: .5; cursor: not-allowed; }
+    .notes-widget {
+      flex-direction: column; align-items: stretch; gap: 8px;
+      min-height: 132px;
+    }
+    .notes-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      flex: 0 0 auto;
+    }
+    .notes-title {
+      margin: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .notes-status { font-size: var(--fs-xs); white-space: nowrap; }
+    .notes-input {
+      flex: 1 1 0; min-height: 0; resize: none;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--panel-2); color: var(--text);
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm); line-height: 1.5;
+    }
+
+    /* ── Compact sticky bar (AppShell applyStickyState) ──────────
+       Desktop only (>1050px, where the bar is sticky). Once the page is
+       scrolled past the header the bar collapses to one row: quick capture,
+       a running timer (status + Stop) and the Pomodoro countdown; notes and
+       the timer form are hidden. JS adds a margin-bottom equal to the height
+       it lost, so the document flow — and the scroll position — never jump.
+       #stickyExpandBtn (a handle under the bar) re-opens it. */
+    .sticky-expand {
+      display: none; position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%);
+      width: 44px; min-height: 0; height: 22px; padding: 0; z-index: 3;
+      align-items: center; justify-content: center;
+      border-radius: var(--radius-pill); border-color: var(--current-border);
+      background: var(--panel); color: var(--muted); box-shadow: var(--shadow-sm);
+    }
+    .sticky-expand:hover { color: var(--text); background: var(--panel); }
+    .sticky-expand:active { transform: translateX(-50%) translateY(1px); }
+    .sticky-bar.is-stuck .sticky-expand { display: inline-flex; }
+    .sticky-bar.is-compact { grid-template-columns: minmax(0, 1fr); }
+    .sticky-bar.is-compact .current-side-aside { display: none; }
+    .sticky-bar.is-compact .current-side-main { flex-direction: row; align-items: stretch; gap: 8px; }
+    .sticky-bar.is-compact .current { padding: 5px 8px; gap: 10px; }
+    .sticky-bar.is-compact #quickCapture { flex: 1 1 auto; }
+    .sticky-bar.is-compact #quickCapture input,
+    .sticky-bar.is-compact #quickCapture button { min-height: 32px; padding: 4px 10px; }
+    .sticky-bar.is-compact #currentTimer { flex: 0 1 auto; flex-direction: row; align-items: center; }
+    .sticky-bar.is-compact:not(.has-active-timer) #currentTimer { display: none; }
+    .sticky-bar.is-compact .current-ticket-row,
+    .sticky-bar.is-compact .current-controls > :not(.current-toolbar),
+    .sticky-bar.is-compact .current-toolbar > :not(#stopBtn) { display: none; }
+    .sticky-bar.is-compact #stopBtn { min-height: 30px; padding: 2px 12px; }
+    .sticky-bar.is-compact #currentTimerStatus { white-space: nowrap; min-width: 0; }
+    .sticky-bar.is-compact #currentTimerStatus .muted { display: none; }
+    .sticky-bar.is-compact #currentTimerStatus .pill { padding: 1px 8px; }
+    .sticky-bar.is-compact .live-duration { font-size: var(--fs-xl); }
+    .sticky-bar.is-compact #pomodoroBar { flex: 0 0 auto; flex-wrap: nowrap; }
+    .sticky-bar.is-compact .pomodoro-info { flex-direction: row; align-items: center; }
+    .sticky-bar.is-compact #pomodoroPill, .sticky-bar.is-compact #pomodoroDuration,
+    .sticky-bar.is-compact #pomodoroSubtitle { display: none; }
+    .sticky-bar.is-compact .pomodoro-buttons button { min-height: 30px; padding: 2px 12px; }
+    .sticky-bar.is-compact .pomodoro-buttons button:disabled { display: none; }
+    .sticky-bar.is-compact .pomodoro-count { min-width: 0; }
+
+    /* ══════════════════════════════════════════════════════════
+       Zeit tab (TimeModule)
+       ══════════════════════════════════════════════════════════ */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap-inner); }
+    .stat { padding: 14px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
+    .stat .value { font-size: var(--fs-2xl); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+    .stat .label { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .day-nav {
+      display: grid;
+      grid-template-columns: auto auto minmax(180px, 220px) auto;
+      gap: 8px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+    .ticket-cell { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+    .copy-btn {
+      width: 24px; height: 24px; min-height: 0; padding: 0; margin-left: 2px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid transparent; color: var(--muted);
+      border-radius: var(--radius-sm); font-size: var(--fs-sm); line-height: 1; flex-shrink: 0;
+      vertical-align: middle;
+    }
+    .copy-btn:hover { color: var(--accent); background: var(--row-hover); border-color: var(--border); }
+    .summary-desc-more { margin-left: 4px; }
+    .ticket-copy-label {
+      cursor: pointer; border-bottom: 1px dashed var(--muted); padding-bottom: 1px;
+      border-radius: 2px;
+    }
+    .ticket-copy-label:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .ticket-copy-label:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .snapshot-list { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 0; }
-    .snapshot-list .empty-hint { color: var(--muted); font-size: 13px; padding: 4px 0; }
+    .snapshot-list .empty-hint, .preset-list .empty-hint { color: var(--muted); font-size: var(--fs-sm); padding: 4px 0; }
     .snapshot-item {
       display: flex; gap: 12px; align-items: center; justify-content: space-between;
       padding: 8px 10px; background: var(--panel-2);
-      border: 1px solid var(--border); border-radius: 10px; font-size: 13px;
+      border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--fs-sm);
     }
     .snapshot-item .snap-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .snapshot-item .snap-title { font-weight: 600; }
-    .snapshot-item .snap-sub { color: var(--muted); font-size: 12px; }
+    .snapshot-item .snap-sub { color: var(--muted); font-size: var(--fs-xs); }
     .snapshot-item .snap-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .snapshot-item .snap-actions button { width: auto; min-height: 30px; padding: 4px 10px; font-size: 13px; }
+    .snapshot-item .snap-actions button { width: auto; min-height: 30px; padding: 4px 10px; font-size: var(--fs-sm); }
     .preset-list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
-    .preset-list .empty-hint { color: var(--muted); font-size: 13px; padding: 4px 0; }
     .preset-item {
       display: flex; gap: 8px; align-items: center; justify-content: space-between;
       padding: 8px 12px; background: var(--panel-2);
-      border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
+      border: 1px solid var(--border); border-radius: var(--radius-md); font-size: var(--fs-base);
     }
     .preset-item .preset-label {
       flex: 1; min-width: 0;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-family: var(--font-mono);
     }
     .preset-item button {
       width: auto; min-height: 28px; padding: 4px 10px;
       background: transparent; border: 1px solid transparent; color: var(--muted);
-      border-radius: 6px; font-size: 13px;
+      border-radius: var(--radius-sm); font-size: var(--fs-sm);
     }
-    .preset-item button:hover { color: var(--bad); background: rgba(255,107,107,.12); border-color: rgba(255,107,107,.35); }
-    #toastRoot {
-      position: fixed; bottom: 16px; right: 16px;
-      display: flex; flex-direction: column; gap: 8px;
-      z-index: 100; max-width: 380px; pointer-events: none;
-    }
-    .toast {
-      pointer-events: auto;
-      padding: 10px 14px; border-radius: 10px;
-      background: var(--panel); border: 1px solid var(--border); color: var(--text);
-      box-shadow: 0 8px 24px rgba(0,0,0,.3);
-      display: flex; gap: 10px; align-items: center;
-      font-size: 14px; opacity: 0; transform: translateY(8px);
-      transition: opacity .18s ease, transform .18s ease;
-    }
-    .toast.show { opacity: 1; transform: translateY(0); }
-    .toast.good { border-color: rgba(48,196,141,.5); }
-    .toast.bad  { border-color: rgba(255,107,107,.5); }
-    .toast.warn { border-color: rgba(255,176,32,.5); }
-    .toast .toast-msg { flex: 1; }
-    .toast button {
-      width: auto; min-height: 28px; padding: 4px 10px; font-size: 13px;
-      border-radius: 8px; background: var(--btn-bg);
-    }
-    .field-error {
-      margin-top: 4px; font-size: 12px; color: var(--bad);
-    }
-    input[aria-invalid="true"],
-    textarea[aria-invalid="true"],
-    select[aria-invalid="true"] {
-      border-color: var(--bad);
-    }
-    .confirm-dialog .dialog-body { padding-top: 14px; }
-    .confirm-dialog p { margin: 0; color: var(--text); }
+    .preset-item button:hover { color: var(--bad); background: var(--tone-bad-bg); border-color: var(--tone-bad-border); }
     .chart-wrap {
       margin-top: 14px; padding: 12px; background: var(--panel-2);
-      border: 1px solid var(--border); border-radius: 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
     }
     .chart-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 8px; }
-    .chart-title { font-size: 14px; font-weight: 600; }
-    .chart-subtitle { font-size: 12px; color: var(--muted); }
+    .chart-title { font-size: var(--fs-base); font-weight: 600; }
+    .chart-subtitle { font-size: var(--fs-xs); color: var(--muted); }
     .chart-canvas-wrap { position: relative; }
     #summaryChart {
       display: block; width: 100%; height: 320px;
       background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
-      border-radius: 10px;
+      border-radius: var(--radius);
     }
     #chartTooltip {
       position: absolute; pointer-events: none;
       background: var(--panel); border: 1px solid var(--border);
-      border-radius: 8px; padding: 8px 10px; font-size: 12px;
-      box-shadow: 0 6px 18px rgba(0,0,0,.35);
+      border-radius: var(--radius-md); padding: 8px 10px; font-size: var(--fs-xs);
+      box-shadow: var(--shadow-pop);
       transform: translate(-50%, calc(-100% - 10px));
-      opacity: 0; transition: opacity .12s ease;
+      opacity: 0; transition: opacity .12s var(--ease);
       max-width: 240px; white-space: normal;
     }
     #chartTooltip.show { opacity: 1; }
     #chartTooltip .ct-title { font-weight: 700; margin-bottom: 4px; }
     #chartTooltip .ct-row { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); }
     #chartTooltip .ct-row span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
-    @media (max-width: 1050px) {
-      .grid { grid-template-columns: 1fr; }
-      .stats { grid-template-columns: repeat(2, 1fr); }
-      .day-nav { grid-template-columns: repeat(2, 1fr); }
-      .current-row { grid-template-columns: 1fr; }
-      .current-row.sticky-bar { position: static; }
-      .notes-widget { min-height: 0; }
-      .notes-input { min-height: 140px; max-height: 40vh; }
-    }
-    @media (max-width: 700px) {
-      .row { grid-template-columns: 1fr; }
-      .field, .field.s3, .field.s4, .field.s5, .field.s6, .field.s12 { grid-column: span 1; }
-      .stats { grid-template-columns: 1fr; }
-      .day-nav { grid-template-columns: 1fr; }
-      .current-row { grid-template-columns: 1fr; }
-      .ticket-row, .ticket-row.ticket-row-split { grid-template-columns: 1fr; }
-      table, thead, tbody, th, td, tr { display: block; }
-      thead { display: none; }
-      tr { border-bottom: 1px solid var(--border); }
-      td { border: none; padding: 8px 10px; }
-      td::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 600; }
-      .week-pivot, .week-pivot thead, .week-pivot tbody, .week-pivot tfoot,
-      .week-pivot tr, .week-pivot th, .week-pivot td { display: revert; }
-      .week-pivot thead { display: table-header-group; }
-      .week-pivot td::before { content: none; }
-      #summaryChart { height: 280px; }
-    }
-    :root {
-      --bg: #0b1020;
-      --panel: #141b2d;
-      --panel-2: #0f1525;
-      --text: #ebeff8;
-      --muted: #9aa5bf;
-      --accent: #6aa9ff;
-      --good: #30c48d;
-      --warn: #ffb020;
-      --bad: #ff6b6b;
-      --border: #24304a;
-      --th-bg: #10182b;
-      --th-text: #c9d4ec;
-      --dialog-bg: #11192b;
-      --btn-bg: #1b2741;
-      --btn-bg-hover: #223050;
-      --row-stripe: rgba(255,255,255,.01);
-      --row-hover: rgba(255,255,255,.04);
-      --panel-shadow: rgba(0,0,0,.25);
-      --body-gradient: linear-gradient(180deg, var(--bg), #0f172a 35%, #0c1322 100%);
-      --current-bg: linear-gradient(180deg, rgba(36,86,184,.22), rgba(36,86,184,.10));
-      --current-border: rgba(106,169,255,.35);
-      --gap-outer: 24px;
-      --gap-inner: 16px;
-    }
-    body[data-theme="light"] {
-      --bg: #f3f5fa;
-      --panel: #ffffff;
-      --panel-2: #f0f2f8;
-      --text: #0f172a;
-      --muted: #4a5572;
-      --accent: #2456b8;
-      --good: #15875a;
-      --warn: #b27100;
-      --bad: #cf4040;
-      --border: #d6dbe6;
-      --th-bg: #e8ecf5;
-      --th-text: #324070;
-      --dialog-bg: #ffffff;
-      --btn-bg: #e6eaf3;
-      --btn-bg-hover: #d9deeb;
-      --row-stripe: rgba(0,0,0,.02);
-      --row-hover: rgba(36,86,184,.06);
-      --panel-shadow: rgba(15,23,42,.08);
-      --body-gradient: linear-gradient(180deg, #f5f7fb, #eef1f8 35%, #e7ebf4 100%);
-      --current-bg: linear-gradient(180deg, rgba(36,86,184,.10), rgba(36,86,184,.04));
-      --current-border: rgba(36,86,184,.30);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--body-gradient);
-      color: var(--text);
-    }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-    .container { max-width: 1380px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: var(--gap-outer); }
-    /* Panels are appended straight into #task-viewRoot, so the spacing
-       between them lives here — the container gap only separates its own
-       four children. */
-    #task-viewRoot { display: flex; flex-direction: column; gap: var(--gap-outer); }
-    .app-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--gap-outer); }
-    .app-head h1 { flex: 1; margin: 0; font-size: 24px; }
-    .app-head-actions { display: flex; gap: 8px; align-items: center; }
-    #themeToggleBtn {
-      width: auto; min-height: 36px; padding: 6px 12px; font-size: 18px; line-height: 1;
-      border-radius: 999px; background: var(--btn-bg);
-    }
-    h1, h2, h3 { margin: 0 0 12px; }
-    p { color: var(--muted); }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 18px 20px;
-      box-shadow: 0 10px 30px var(--panel-shadow);
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    /* The panel's own flex gap handles vertical rhythm, so the shared
-       heading/paragraph margins would double up on it. */
-    .panel > * { margin-top: 0; margin-bottom: 0; }
-    .row {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 10px;
-      align-items: end;
-      margin-bottom: 10px;
-    }
-    .field { grid-column: span 12; }
-    .field.s3 { grid-column: span 3; }
-    .field.s4 { grid-column: span 4; }
-    .field.s6 { grid-column: span 6; }
-    .field.s9 { grid-column: span 9; }
-    .field.s12 { grid-column: span 12; }
-    label {
-      display: block;
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    input, select, button, textarea {
-      width: 100%;
-      min-height: 40px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      color: var(--text);
-      padding: 10px 12px;
-      font: inherit;
-    }
-    textarea { min-height: 84px; resize: vertical; }
-    button {
-      cursor: pointer;
-      background: var(--btn-bg);
-      transition: transform .08s ease, opacity .15s ease, background .15s ease;
-    }
-    button:hover { background: var(--btn-bg-hover); }
-    button:active { transform: translateY(1px); }
-    button.primary { background: #2456b8; color: #fff; }
-    button.good { background: #136c4b; color: #fff; }
-    button.warn { background: #8f6111; color: #fff; }
-    button.bad { background: #7f2c2c; color: #fff; }
-    body[data-theme="light"] button.primary { background: #2456b8; color: #fff; }
-    body[data-theme="light"] button.primary:hover { background: #1d4699; }
-    body[data-theme="light"] button.good { background: #15875a; color: #fff; }
-    body[data-theme="light"] button.good:hover { background: #117049; }
-    body[data-theme="light"] button.warn { background: #d18a2e; color: #fff; }
-    body[data-theme="light"] button.warn:hover { background: #b67422; }
-    body[data-theme="light"] button.bad { background: #cf4040; color: #fff; }
-    body[data-theme="light"] button.bad:hover { background: #b03333; }
-    button.ghost { background: transparent; border-color: var(--border); }
-    .muted { color: var(--muted); }
-    .hint { font-size: 12px; color: var(--muted); line-height: 1.45; margin: 6px 0 0; }
 
-    /* ── Tab bar ───────────────────────────────────────────────── */
-    .tabbar { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-    .tabbar button {
-      width: auto; min-height: 40px; padding: 8px 16px;
-      border-radius: 999px; background: var(--btn-bg); border-color: var(--border);
-      white-space: nowrap; display: inline-flex; align-items: center; gap: 8px;
-    }
-    .tabbar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .tabbar button[hidden] { display: none; }
-    .tab-badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
-      background: var(--panel-2); color: var(--text);
-      font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
-    }
-    .tabbar button.active .tab-badge { background: rgba(255,255,255,.25); color: #fff; }
-    .tab-badge.over { background: rgba(255,176,32,.25); color: var(--warn); }
-    .tabbar button.active .tab-badge.over { background: rgba(255,255,255,.3); color: #fff; }
-
-    /* ── Panels & sections ─────────────────────────────────────── */
-    .panel-head {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; margin-bottom: 10px; flex-wrap: wrap;
-    }
-    .panel-head h2 { margin: 0; font-size: 18px; }
+    /* ══════════════════════════════════════════════════════════
+       Aufgaben tab (TaskModule)
+       ══════════════════════════════════════════════════════════ */
     .capture-row {
       display: grid; gap: 8px;
       grid-template-columns: minmax(0, 1fr) minmax(0, 160px);
@@ -687,22 +710,19 @@
       display: grid; gap: 8px; align-items: center;
       grid-template-columns: auto minmax(0, 1fr) auto auto;
     }
-    .week-nav .week-label { text-align: center; font-weight: 700; font-size: 16px; }
+    .week-nav .week-label { text-align: center; font-weight: 700; font-size: var(--fs-lg); }
     .week-nav button { width: auto; }
     .filter-row { display: grid; gap: var(--gap-inner); grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; }
 
     /* ── Banners ───────────────────────────────────────────────── */
     .banner {
       display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-      padding: 12px 16px; border-radius: 12px;
+      padding: 12px 16px; border-radius: var(--radius-lg);
       background: var(--current-bg); border: 1px solid var(--current-border);
     }
     .banner .banner-msg { flex: 1; min-width: 220px; }
-    .banner button { width: auto; min-height: 34px; padding: 6px 12px; font-size: 13px; }
-    .banner.warn {
-      background: rgba(255,176,32,.12);
-      border-color: rgba(255,176,32,.4);
-    }
+    .banner button { width: auto; min-height: 34px; padding: 6px 12px; font-size: var(--fs-sm); }
+    .banner.warn { background: rgba(255,176,32,.12); border-color: rgba(255,176,32,.4); }
 
     /* ── Task cards ────────────────────────────────────────────── */
     /* Compact two-line cards: [handle][check] ticket: title / meta / notes,
@@ -714,10 +734,15 @@
       background: var(--panel-2);
       border: 1px solid var(--border);
       border-left: 3px solid var(--border);
-      border-radius: 10px;
-      padding: 6px 10px 6px 8px;
+      border-radius: var(--radius);
+      padding: 7px 10px 7px 8px;
       display: flex; flex-direction: column; gap: 6px;
+      transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
     }
+    .task-card:hover { border-top-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+      border-right-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+      border-bottom-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+      box-shadow: var(--shadow-sm); }
     .task-card.prio-zero { border-left-color: var(--bad); }
     .task-card.prio-eighty { border-left-color: var(--warn); }
     .task-card.prio-nice { border-left-color: var(--muted); }
@@ -733,13 +758,13 @@
     details.pill-menu > summary::-webkit-details-marker { display: none; }
     details.pill-menu > summary.pill:hover { filter: brightness(1.12); border-style: solid; }
     details.pill-menu > summary .pill-caret { font-size: 9px; opacity: .7; margin-left: -2px; }
-    details.pill-menu > summary.ticket-add { display: inline-flex; align-items: center; padding: 0 6px; font-size: 11px; line-height: 1.6; }
+    details.pill-menu > summary.ticket-add { display: inline-flex; align-items: center; padding: 0 6px; font-size: var(--fs-2xs); line-height: 1.6; }
     .pill-menu-list { left: 0; right: auto; min-width: 180px; }
     .pill-menu-list button.active { font-weight: 700; }
     .task-row { display: flex; gap: 8px; align-items: flex-start; }
     .drag-handle {
       flex: 0 0 auto; width: 12px; margin-left: -4px;
-      color: var(--muted); font-size: 14px; line-height: 22px; cursor: grab; user-select: none;
+      color: var(--muted); font-size: var(--fs-base); line-height: 22px; cursor: grab; user-select: none;
       visibility: hidden;
     }
     .drag-handle:active { cursor: grabbing; }
@@ -747,11 +772,11 @@
       flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; padding: 0; margin-top: 2px; /* centre on the 22px title line */
       border-radius: 50%; border: 2px solid var(--muted); background: transparent;
     }
-    button.task-check:hover { border-color: var(--good); background: rgba(48,196,141,.2); }
+    button.task-check:hover { border-color: var(--good); background: var(--tone-good-bg); }
     .task-check.static {
       flex: 0 0 auto; width: 18px; height: 22px;
       display: inline-flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; color: var(--muted);
+      font-size: var(--fs-xs); font-weight: 700; color: var(--muted);
     }
     .task-check.static.state-done { color: var(--good); }
     .task-check.static.state-escalated { color: var(--accent); }
@@ -761,25 +786,24 @@
        line box keeps ticket, title, copy buttons and the round check on one
        optical line: inline buttons are top-aligned and never taller than
        the line, so revealing them on hover can't move the text. */
-    .task-line { display: block; font-size: 14px; line-height: 22px; overflow-wrap: anywhere; }
+    .task-line { display: block; font-size: var(--fs-base); line-height: 22px; overflow-wrap: anywhere; }
     .task-title-wrap { display: inline; }
     .task-title { font-weight: 600; }
     /* Ticket = a quiet prefix "ABC-123: Titel": accent-coloured monospace
        (same size and baseline as the title), no box, ":" right after it. */
     .ticket-chip { display: inline; margin-right: 5px; white-space: nowrap; color: var(--accent); font-weight: 600; }
     .ticket-chip .ticket-text {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 13px; vertical-align: baseline; line-height: 1; /* don't grow the 22px line box */
+      font-family: var(--font-mono);
+      font-size: var(--fs-sm); vertical-align: baseline; line-height: 1; /* don't grow the 22px line box */
     }
     .task-line button.copy-btn, .task-line .ticket-add {
       vertical-align: top; height: 20px; min-height: 0; margin-top: 1px; line-height: 18px;
     }
     .ticket-chip button.copy-btn { display: none; margin-left: 2px; }
     .task-card:hover .ticket-chip button.copy-btn, .task-card:focus-within .ticket-chip button.copy-btn { display: inline-flex; }
-    @media (hover: none) { .ticket-chip button.copy-btn { display: inline-flex; } }
     button.ticket-add {
-      width: auto; padding: 0 6px; font-size: 11px;
-      background: transparent; border: 1px dashed var(--border); color: var(--muted); border-radius: 6px;
+      width: auto; padding: 0 6px; font-size: var(--fs-2xs);
+      background: transparent; border: 1px dashed var(--border); color: var(--muted); border-radius: var(--radius-sm);
     }
     .task-title-wrap .ticket-add { margin-left: 6px; }
     .task-line > .ticket-add { margin-right: 6px; }
@@ -789,12 +813,11 @@
     .task-title-wrap button.copy-btn, .task-title-wrap .ticket-add { display: none; }
     .task-card:hover .task-title-wrap button.copy-btn, .task-card:focus-within .task-title-wrap button.copy-btn,
     .task-card:hover .task-title-wrap .ticket-add, .task-card:focus-within .task-title-wrap .ticket-add { display: inline-flex; }
-    @media (hover: none) { .task-title-wrap button.copy-btn, .task-title-wrap .ticket-add { display: inline-flex; } }
-    .editable { cursor: text; border-radius: 4px; }
+    .editable { cursor: text; border-radius: var(--radius-xs); }
     .editable:hover { background: rgba(127,127,127,.12); }
     .editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .task-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
-    .task-meta .pill { padding: 0 7px; font-size: 11px; line-height: 1.6; }
+    .task-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: var(--fs-2xs); color: var(--muted); }
+    .task-meta .pill { padding: 0 7px; font-size: var(--fs-2xs); line-height: 1.6; }
     .task-meta .purge-soon { color: var(--warn); }
     .task-notes-wrap { display: flex; gap: 2px; align-items: flex-start; }
     .task-notes {
@@ -804,29 +827,30 @@
     }
     .task-notes-slot.empty-slot { display: none; }
     input.inline-edit {
-      width: min(100%, 520px); min-height: 0; padding: 2px 6px; font-size: 14px; font-weight: 600;
+      width: min(100%, 520px); min-height: 0; padding: 2px 6px; font-size: var(--fs-base); font-weight: 600;
       vertical-align: baseline;
     }
-    input.inline-edit.ticket-edit { width: 9rem; margin-right: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 400; }
+    input.inline-edit.ticket-edit { width: 9rem; margin-right: 6px; font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 400; }
     .ticket-chip input.inline-edit.ticket-edit { margin-right: 0; }
     textarea.task-notes-edit {
       width: 100%; min-height: 160px; max-height: 70vh; resize: vertical;
-      font-size: 13px; line-height: 1.45; padding: 6px 8px;
+      font-size: var(--fs-sm); line-height: 1.45; padding: 6px 8px;
     }
     /* Icon buttons (copy, star, timer, archive actions) */
     button.icon-btn {
-      width: auto; min-height: 26px; height: 26px; padding: 0 7px; font-size: 13px; line-height: 1;
-      border-radius: 7px;
+      width: auto; min-height: 26px; height: 26px; padding: 0 7px; font-size: var(--fs-sm); line-height: 1;
+      border-radius: var(--radius-sm);
     }
     button.copy-btn {
-      min-height: 20px; height: 20px; padding: 0 4px; font-size: 12px;
+      min-height: 20px; height: 20px; padding: 0 4px; font-size: var(--fs-xs);
       background: transparent; border-color: transparent; color: var(--muted);
       visibility: hidden;
     }
     button.copy-btn:hover { color: var(--text); border-color: var(--border); }
-    button.small-btn { width: auto; min-height: 26px; height: 26px; padding: 0 10px; font-size: 12px; }
-    .star-btn { border-radius: 999px; background: transparent; border-color: var(--border); color: var(--muted); }
-    .star-btn.on { color: var(--warn); border-color: var(--warn); }
+    button.small-btn { width: auto; min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--fs-xs); }
+    .star-btn { border-radius: var(--radius-pill); background: transparent; border-color: var(--border); color: var(--muted); }
+    .star-btn.on { color: var(--warn); border-color: var(--tone-warn-border); background: var(--tone-warn-bg); }
+    button.icon-btn > .icon { font-size: 14px; }
     /* Action symbols are always visible. Secondary helpers are revealed on
        hover/focus via visibility, so the layout doesn't jump. */
     .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; margin-top: -2px; /* 26px buttons centred on the 22px title line */ }
@@ -835,6 +859,8 @@
     .task-card:hover .copy-btn, .task-card:focus-within .copy-btn,
     .task-card:hover .drag-handle, .task-card:focus-within .drag-handle { visibility: visible; }
     @media (hover: none) {
+      .ticket-chip button.copy-btn,
+      .task-title-wrap button.copy-btn, .task-title-wrap .ticket-add { display: inline-flex; }
       .hover-only, .copy-btn, .drag-handle { visibility: visible; }
     }
     /* ⋯ card menu (native <details>) */
@@ -842,139 +868,113 @@
     details.card-menu > summary {
       list-style: none; cursor: pointer; user-select: none;
       display: inline-flex; align-items: center; justify-content: center;
-      height: 26px; min-width: 28px; padding: 0 6px; border-radius: 7px;
+      height: 26px; min-width: 28px; padding: 0 6px; border-radius: var(--radius-sm);
       border: 1px solid var(--border); background: var(--btn-bg); color: var(--text); font-weight: 700;
     }
     details.card-menu > summary::-webkit-details-marker { display: none; }
-    details.card-menu[open] > summary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    details.card-menu[open] > summary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
     .card-menu-list {
       position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
       min-width: 220px; padding: 4px;
       display: flex; flex-direction: column; gap: 2px;
-      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: var(--shadow-pop);
     }
     .card-menu-list button {
-      width: 100%; min-height: 30px; padding: 4px 10px; font-size: 13px; text-align: left;
+      width: 100%; min-height: 30px; padding: 4px 10px; font-size: var(--fs-sm); text-align: left;
       background: transparent; border-color: transparent;
     }
-    .card-menu-list button:hover { background: var(--btn-bg); border-color: var(--border); }
+    .card-menu-list button:hover { background: var(--btn-bg); border-color: transparent; }
     .card-menu-list button.danger { color: var(--bad); }
     .triage { display: flex; flex-direction: column; gap: 4px; padding-left: 26px; }
-    .triage .chips button { min-height: 26px; padding: 2px 10px; font-size: 12px; }
+    .triage .chips button { min-height: 26px; padding: 2px 10px; font-size: var(--fs-xs); }
     /* Tasks toolbar: sub-tabs + live search (#taskSearch) */
     .task-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .task-toolbar .tabbar { flex: 1 1 auto; }
-    .task-toolbar #taskSearch { width: auto; flex: 0 1 280px; min-width: 180px; }
+    .task-toolbar .tabbar { flex: 0 1 auto; }
+    .task-toolbar #taskSearch { width: auto; flex: 0 1 280px; min-width: 180px; margin-left: auto; }
     /* Inbox Schnellerfassung: a single row, barely taller than its inputs. */
     .panel.capture-panel { padding: 8px 10px; }
     .capture-row.with-ticket { grid-template-columns: minmax(0, 7rem) minmax(0, 1fr) auto auto; align-items: center; gap: 6px; }
     .capture-row.with-ticket input { min-height: 36px; padding: 6px 10px; }
     .capture-row.with-ticket button { width: auto; min-height: 36px; padding: 6px 14px; }
-    .capture-row.with-ticket button.icon-btn { height: 36px; padding: 0 10px; font-size: 15px; }
-    .capture-row.with-ticket button.icon-btn[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .capture-ticket { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .capture-row.with-ticket button.icon-btn { height: 36px; padding: 0 10px; font-size: var(--fs-md); }
+    .capture-row.with-ticket button.icon-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+    .capture-ticket { font-family: var(--font-mono); }
     textarea.capture-notes { margin-top: 6px; min-height: 90px; resize: vertical; }
     .edit-panel-foot { display: flex; justify-content: flex-end; }
-    .edit-panel-foot button { width: auto; min-height: 30px; padding: 4px 12px; font-size: 13px; }
-
-    /* ── Pills ─────────────────────────────────────────────────── */
-    .pill {
-      display: inline-flex; gap: 6px; align-items: center;
-      background: var(--panel); color: var(--muted);
-      border: 1px solid var(--border); border-radius: 999px;
-      padding: 3px 10px; font-size: 12px; font-weight: 600;
-      white-space: nowrap;
-    }
-    .pill.prio-zero { background: rgba(255,107,107,.15); color: #ffb3b3; border-color: rgba(255,107,107,.45); }
-    .pill.prio-eighty { background: rgba(255,176,32,.15); color: #ffd699; border-color: rgba(255,176,32,.42); }
-    .pill.prio-nice { background: rgba(154,165,191,.14); color: #c3cbdf; border-color: rgba(154,165,191,.35); }
-    .pill.state-done { background: rgba(48,196,141,.15); color: #b8f0d8; border-color: rgba(48,196,141,.4); }
-    .pill.state-dropped { background: rgba(154,165,191,.12); color: #b3bbcf; border-color: rgba(154,165,191,.3); }
-    .pill.state-escalated { background: rgba(106,169,255,.15); color: #bcd8ff; border-color: rgba(106,169,255,.42); }
-    body[data-theme="light"] .pill.prio-zero { background: rgba(207,64,64,.12); color: #a12c2c; border-color: rgba(207,64,64,.45); }
-    body[data-theme="light"] .pill.prio-eighty { background: rgba(178,113,0,.12); color: #8a5a00; border-color: rgba(178,113,0,.45); }
-    body[data-theme="light"] .pill.prio-nice { background: rgba(74,85,114,.10); color: #4a5572; border-color: rgba(74,85,114,.32); }
-    body[data-theme="light"] .pill.state-done { background: rgba(19,108,75,.12); color: #0e6a48; border-color: rgba(19,108,75,.45); }
-    body[data-theme="light"] .pill.state-dropped { background: rgba(74,85,114,.10); color: #4a5572; border-color: rgba(74,85,114,.3); }
-    body[data-theme="light"] .pill.state-escalated { background: rgba(36,86,184,.12); color: #1d4699; border-color: rgba(36,86,184,.42); }
-
-    /* ── Chip rows (triage) ────────────────────────────────────── */
-    .chip-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .chip-group > .chip-label { font-size: 12px; color: var(--muted); min-width: 68px; }
-    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-    .chips button {
-      width: auto; min-height: 32px; padding: 4px 12px;
-      font-size: 13px; border-radius: 999px;
-      background: var(--btn-bg); border-color: var(--border);
-    }
-    .chips button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .chips button.active.prio-zero { background: #a12c2c; border-color: #a12c2c; }
-    .chips button.active.prio-eighty { background: #8f6111; border-color: #8f6111; }
-    .chips button.active.effort-toolarge { background: #7f2c2c; border-color: #7f2c2c; }
-    .chips button.active.effort-tbd { background: #8f6111; border-color: #8f6111; }
+    .edit-panel-foot button { width: auto; min-height: 30px; padding: 4px 12px; font-size: var(--fs-sm); }
 
     /* ── Post-hoc edit panel ───────────────────────────────────── */
     .edit-panel {
       display: flex; flex-direction: column; gap: 10px;
-      padding: 12px; border-radius: 10px;
+      padding: 12px; border-radius: var(--radius);
       border: 1px dashed var(--border); background: var(--panel);
     }
-    .edit-panel .week-picker { width: auto; min-height: 32px; padding: 4px 10px; font-size: 13px; }
+    .edit-panel .week-picker { width: auto; min-height: 32px; padding: 4px 10px; font-size: var(--fs-sm); }
 
     /* ── Guardrail footers ─────────────────────────────────────── */
     .guard {
       display: flex; flex-direction: column; gap: 8px;
-      padding: 10px 12px; border-radius: 10px;
+      padding: 10px 12px; border-radius: var(--radius);
       border: 1px solid var(--border); background: var(--panel);
     }
     .guard.quick { border-color: rgba(48,196,141,.45); background: rgba(48,196,141,.08); }
     .guard.toolarge { border-color: rgba(255,107,107,.45); background: rgba(255,107,107,.08); }
     .guard.tbd { border-color: rgba(255,176,32,.45); background: rgba(255,176,32,.08); }
-    .guard-msg { font-size: 13px; line-height: 1.5; }
+    .guard-msg { font-size: var(--fs-sm); line-height: 1.5; }
     .guard-msg b { color: var(--text); }
     .guard-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .guard-actions button { width: auto; min-height: 28px; padding: 3px 10px; font-size: 12px; }
+    .guard-actions button { width: auto; min-height: 28px; padding: 3px 10px; font-size: var(--fs-xs); }
     #taskPromptDialog textarea { min-height: 160px; resize: vertical; }
     .nudge {
       display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-      padding: 8px 10px; border-radius: 10px;
+      padding: 8px 10px; border-radius: var(--radius);
       background: rgba(255,176,32,.10); border: 1px solid rgba(255,176,32,.4);
-      font-size: 13px;
+      font-size: var(--fs-sm);
     }
     .nudge .nudge-msg { flex: 1; min-width: 180px; }
-    .nudge button { width: auto; min-height: 30px; padding: 4px 10px; font-size: 12px; }
+    .nudge button { width: auto; min-height: 30px; padding: 4px 10px; font-size: var(--fs-xs); }
 
     /* ── Groups ────────────────────────────────────────────────── */
     .group { margin-top: 14px; }
     .group:first-child { margin-top: 0; }
     .group-head {
       display: flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 700; color: var(--th-text);
+      font-size: var(--fs-sm); font-weight: 700; color: var(--th-text);
       text-transform: uppercase; letter-spacing: .04em;
       margin-bottom: 8px; padding-bottom: 6px;
       border-bottom: 1px solid var(--border);
     }
     .group-count { font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
+
+    /* ══════════════════════════════════════════════════════════
+       Shared feedback: empty states, toasts, dialogs
+       ══════════════════════════════════════════════════════════ */
     .empty {
       padding: 20px; text-align: center; color: var(--muted);
-      border: 1px dashed var(--border); border-radius: 12px; font-size: 14px; line-height: 1.6;
+      background: var(--panel-2);
+      border: 1px dashed var(--border); border-radius: var(--radius-lg);
+      font-size: var(--fs-base); line-height: 1.6;
     }
-
-    /* ── Toasts ────────────────────────────────────────────────── */
+    /* Empty state with icon (TaskModule emptyState()): icon above the text. */
+    .empty.with-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 20px; }
+    .empty.with-icon > .icon {
+      width: 40px; height: 40px; padding: 9px; border-radius: var(--radius-pill);
+      background: var(--tone-accent-bg); color: var(--accent); stroke-width: 1.75;
+    }
     #toastRoot {
       position: fixed; right: 16px; bottom: 16px; z-index: 60;
       display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
-      pointer-events: none;
+      max-width: 380px; pointer-events: none;
     }
     .toast {
       pointer-events: auto;
-      padding: 10px 14px; border-radius: 10px;
+      padding: 10px 14px; border-radius: var(--radius);
       background: var(--panel); border: 1px solid var(--border); color: var(--text);
-      box-shadow: 0 8px 24px rgba(0,0,0,.3);
+      box-shadow: var(--shadow-pop);
       display: flex; gap: 10px; align-items: center;
-      font-size: 14px; opacity: 0; transform: translateY(8px);
-      transition: opacity .18s ease, transform .18s ease;
+      font-size: var(--fs-base); opacity: 0; transform: translateY(8px);
+      transition: opacity .18s var(--ease), transform .18s var(--ease);
       max-width: min(420px, calc(100vw - 32px));
     }
     .toast.show { opacity: 1; transform: translateY(0); }
@@ -983,44 +983,136 @@
     .toast.warn { border-color: rgba(255,176,32,.5); }
     .toast .toast-msg { flex: 1; }
     .toast button {
-      width: auto; min-height: 28px; padding: 4px 10px; font-size: 13px;
-      border-radius: 8px; background: var(--btn-bg);
+      width: auto; min-height: 28px; padding: 4px 10px; font-size: var(--fs-sm);
+      border-radius: var(--radius-md); background: var(--btn-bg);
     }
-
-    /* ── Dialog ────────────────────────────────────────────────── */
     dialog {
       width: min(560px, calc(100vw - 24px)); border: 1px solid var(--border);
-      border-radius: 14px; background: var(--dialog-bg); color: var(--text); padding: 0;
+      border-radius: var(--radius-xl); background: var(--dialog-bg); color: var(--text); padding: 0;
     }
-    dialog::backdrop { background: rgba(0,0,0,.5); }
-    /* Pomodoro expiry: a full-screen, must-acknowledge overlay. */
-    dialog.pomodoro-done { width: min(460px, 92vw); border: 2px solid var(--warn); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
-    dialog.pomodoro-done::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(2px); }
-    .pomodoro-done-body { padding: 28px 24px 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
-    .pomodoro-done-icon { font-size: 56px; line-height: 1; }
-    .pomodoro-done-body h2 { margin: 8px 0 0; font-size: 26px; }
-    .pomodoro-done-body p { margin: 0; font-size: 16px; color: var(--muted); }
-    .pomodoro-done-body .pomodoro-done-time { font-size: 13px; }
-    .pomodoro-done-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
-    .pomodoro-done-actions button { width: auto; min-height: 42px; padding: 8px 20px; font-size: 15px; }
+    dialog { box-shadow: var(--shadow-pop); }
+    dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(3px); }
+    .dialog-head, .dialog-foot { padding: 16px; }
+    .dialog-head { border-bottom: 1px solid var(--border); }
+    .dialog-foot { border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
     .dialog-body { padding: 18px; display: flex; flex-direction: column; gap: var(--gap-inner); }
     .dialog-body h3 { margin: 0; }
     .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .dialog-actions button { width: auto; min-height: 38px; padding: 8px 16px; }
+    .confirm-dialog .dialog-body { padding-top: 14px; }
+    .confirm-dialog p { margin: 0; color: var(--text); }
+    /* Command menu (Ctrl/⌘+K, AppShell openCommandMenu) */
+    dialog.command-dialog { width: min(600px, calc(100vw - 24px)); margin-top: 12vh; padding: 0; overflow: hidden; }
+    .command-search { display: flex; align-items: center; gap: 10px; padding: 4px 16px; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .command-search .icon { font-size: var(--fs-xl); }
+    .command-search input { border: none; background: transparent; min-height: 52px; padding: 0; font-size: var(--fs-lg); }
+    .command-search input:focus { box-shadow: none; }
+    .command-list { list-style: none; margin: 0; padding: 6px; max-height: min(420px, 55vh); overflow-y: auto; }
+    .command-list li {
+      display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: var(--radius-md);
+      cursor: pointer; color: var(--text); font-size: var(--fs-base);
+    }
+    .command-list li .icon { color: var(--muted); }
+    .command-list li .cmd-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .command-list li .cmd-group { font-size: var(--fs-xs); color: var(--muted); }
+    .command-list li[aria-selected="true"] { background: var(--tone-accent-bg); }
+    .command-list li[aria-selected="true"] .icon { color: var(--accent); }
+    .command-list .cmd-empty { color: var(--muted); cursor: default; justify-content: center; }
+    .command-foot {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 14px;
+      border-top: 1px solid var(--border); font-size: var(--fs-xs); color: var(--muted);
+    }
+    .command-foot kbd {
+      padding: 1px 6px; border-radius: var(--radius-xs); border: 1px solid var(--border);
+      background: var(--panel-2); font-family: var(--font-mono); font-size: var(--fs-2xs); color: var(--text);
+    }
 
+    /* Pomodoro expiry: a full-screen, must-acknowledge overlay. */
+    dialog.pomodoro-done { width: min(460px, 92vw); border: 2px solid var(--warn); box-shadow: var(--shadow-dialog); }
+    dialog.pomodoro-done::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(2px); }
+    .pomodoro-done-body { padding: 28px 24px 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+    .pomodoro-done-icon { font-size: 56px; line-height: 1; color: var(--warn); }
+    .pomodoro-done-icon .icon { stroke-width: 1.75; }
+    .pomodoro-done-body h2 { margin: 8px 0 0; font-size: 26px; }
+    .pomodoro-done-body p { margin: 0; font-size: var(--fs-lg); color: var(--muted); }
+    .pomodoro-done-body .pomodoro-done-time { font-size: var(--fs-sm); }
+    .pomodoro-done-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+    .pomodoro-done-actions button { width: auto; min-height: 42px; padding: 8px 20px; font-size: var(--fs-md); }
+
+    /* ── Dense Aufgaben tab ─────────────────────────────────────
+       Scoped to #task-viewRoot so the Zeit tab keeps its roomier forms:
+       tighter panels, headings, groups and two-line cards, so more tasks
+       fit on screen. .panel-slim = a toolbar-like single-row panel
+       (week navigation, backlog filters). */
+    #task-viewRoot { gap: 14px; }
+    #task-viewRoot > .panel { padding: 14px 16px; gap: 8px; border-radius: var(--radius-lg); }
+    #task-viewRoot > .panel.panel-slim { padding: 6px; }
+    #task-viewRoot .panel-head { margin-bottom: 0; }
+    #task-viewRoot .panel-head h2 { font-size: var(--fs-lg); }
+    #task-viewRoot .hint { margin: 0; }
+    #task-viewRoot .group { margin-top: 10px; }
+    #task-viewRoot .group:first-child, #task-viewRoot .panel-head + .group { margin-top: 2px; }
+    #task-viewRoot .group-head { font-size: var(--fs-2xs); margin-bottom: 5px; padding-bottom: 4px; }
+    #task-viewRoot .task-list { gap: 4px; }
+    #task-viewRoot .task-card { padding: 4px 8px 4px 6px; gap: 3px; }
+    #task-viewRoot .task-body { gap: 1px; }
+    #task-viewRoot .task-notes { line-height: 1.35; }
+    #task-viewRoot .empty.with-icon { padding: 18px 16px; }
+    /* Week navigation: one slim row — ‹ KW … › [Diese Woche]. */
+    .week-bar .week-nav { gap: 6px; }
+    .week-bar .week-nav button { min-height: 30px; height: 30px; padding: 0 10px; font-size: var(--fs-sm); }
+    /* Class, not :has() — Firefox ESR 115 has no :has(), and inside a
+       selector list it would drop the whole rule. */
+    .week-bar .week-nav button.icon-only { width: 30px; padding: 0; }
+    .week-bar .week-nav .week-label { font-size: var(--fs-base); font-weight: 600; }
+    /* Backlog filters: compact selects in the slim panel. */
+    .panel-slim .filter-row { gap: 8px; padding: 2px 4px 4px; }
+    .panel-slim .filter-row label { font-size: var(--fs-2xs); margin-bottom: 3px; }
+    .panel-slim .filter-row select, .panel-slim .filter-row button { min-height: 32px; padding: 4px 10px; font-size: var(--fs-sm); }
+
+    /* Inside a .panel the flex gap owns the vertical rhythm, so these
+       components' own outer margins (meant for use outside panels) are
+       dropped when they are a panel's direct child. */
+    .panel > :is(.toolbar, .range-chips, .day-nav, .chart-wrap, .compact-menu,
+                 .snapshot-list, .preset-list, .ticket-help, .field-error,
+                 .compact-hint, .field-label-row) { margin-top: 0; margin-bottom: 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+      button:active { transform: none; }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       Breakpoints
+       ══════════════════════════════════════════════════════════ */
     @media (max-width: 1050px) {
+      .grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .day-nav { grid-template-columns: repeat(2, 1fr); }
       .filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .current-row { grid-template-columns: 1fr; }
+      .current-row.sticky-bar { position: static; }
+      .notes-widget { min-height: 0; }
+      .notes-input { min-height: 140px; max-height: 40vh; }
     }
     @media (max-width: 700px) {
       .container { padding: 14px; }
+      .app-head { grid-template-columns: minmax(0, 1fr) auto; row-gap: 12px; }
+      .app-head #mainTabbar { grid-column: 1 / -1; grid-row: 2; display: flex; }
+      .app-head #mainTabbar button { flex: 1 1 0; padding: 6px 10px; }
+      .tabbar button { padding: 6px 10px; font-size: var(--fs-sm); }
       .row { grid-template-columns: 1fr; }
-      .field, .field.s3, .field.s4, .field.s6, .field.s9, .field.s12 { grid-column: span 1; }
+      .field, .field.s3, .field.s4, .field.s5, .field.s6, .field.s9, .field.s12 { grid-column: span 1; }
+      .stats { grid-template-columns: 1fr; }
+      .day-nav { grid-template-columns: 1fr; }
+      .ticket-row, .ticket-row.ticket-row-split { grid-template-columns: 1fr; }
       .capture-row { grid-template-columns: 1fr; }
       .filter-row { grid-template-columns: 1fr; }
       .week-nav { grid-template-columns: auto minmax(0, 1fr) auto; }
       .week-nav .week-today { grid-column: 1 / -1; }
-      .app-head { flex-direction: column; align-items: stretch; }
-      .app-head-actions { justify-content: flex-end; }
+      .week-bar .week-nav { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+      .week-bar .week-nav .week-today { grid-column: auto; }
+      .week-bar .week-nav .week-label { font-size: var(--fs-sm); }
       .chip-group { align-items: flex-start; flex-direction: column; gap: 4px; }
       .capture-row.with-ticket { grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) auto auto; }
       .capture-row.with-ticket button:not(.icon-btn) { padding: 6px 10px; }
@@ -1031,28 +1123,51 @@
       .task-body { flex: 1 1 calc(100% - 60px); }
       .task-hover { margin-left: auto; }
       .triage { padding-left: 0; }
+      table, thead, tbody, th, td, tr { display: block; }
+      thead { display: none; }
+      tr { border-bottom: 1px solid var(--border); }
+      td { border: none; padding: 8px 10px; }
+      td::before { content: attr(data-label) ": "; color: var(--muted); font-weight: 600; }
+      .week-pivot, .week-pivot thead, .week-pivot tbody, .week-pivot tfoot,
+      .week-pivot tr, .week-pivot th, .week-pivot td { display: revert; }
+      .week-pivot thead { display: table-header-group; }
+      .week-pivot td::before { content: none; }
+      #summaryChart { height: 280px; }
     }
-
-    /* ══════════════════════════════════════════════════════════
-       App shell (LocalWorkTracker)
-       ══════════════════════════════════════════════════════════ */
-    #mainTabbar { margin-top: 4px; }
-    #mainTabbar button {
-      width: auto; min-height: 40px; padding: 8px 18px; font-size: 15px; font-weight: 600;
-    }
-    .tab-panel { display: flex; flex-direction: column; gap: var(--gap-outer); }
-    .tab-panel[hidden] { display: none; }
-    .app-footer {
-      font-size: 12px; color: var(--muted); text-align: center;
-      padding-top: 4px; border-top: 1px solid var(--border);
-    }
-    @media (max-width: 700px) {
-      #mainTabbar { flex-direction: column; }
-    }
-
   </style>
 </head>
 <body>
+  <!-- Icon sprite: hand-drawn 24×24 stroke icons, referenced via <use href="#i-…">
+       (static markup) or LWT.ui.icon(name) (JS). Stroke/fill come from .icon. -->
+  <svg id="iconSprite" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h11M19 18h1"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.85 6.75 19.6l1-5.8L3.5 9.7l5.9-.9z"/></symbol>
+    <symbol id="i-star-filled" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.85 6.75 19.6l1-5.8L3.5 9.7l5.9-.9z" fill="currentColor"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M6 6l7 6-7 6z"/><path d="M17 6v12"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></symbol>
+    <symbol id="i-reopen" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 2.5h5L16 13h5"/><path d="M5.5 5h13l2.5 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/></symbol>
+    <symbol id="i-logo" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M10 2.5h4"/></symbol>
+  </svg>
+
   <script>
     (function () {
       'use strict';
@@ -1096,22 +1211,57 @@
       if (theme === 'light') document.body.setAttribute('data-theme', 'light');
 
       window.LWT = window.LWT || {};
+
+      // Shared icon helper (all three modules use it). Builds
+      // <svg class="icon"><use href="#i-name"></svg> via DOM APIs only; the
+      // icon is decorative (aria-hidden) — callers keep their own
+      // title/aria-label as the accessible name.
+      var SVG_NS = 'http://www.w3.org/2000/svg';
+      function icon(name, className) {
+        var svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('class', 'icon' + (className ? ' ' + className : ''));
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('focusable', 'false');
+        var use = document.createElementNS(SVG_NS, 'use');
+        use.setAttribute('href', '#i-' + name);
+        svg.appendChild(use);
+        return svg;
+      }
+      // Replaces node's content with [icon][text]. text is set via
+      // textContent, never parsed as HTML.
+      function setIcon(node, name, text) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+        node.appendChild(icon(name));
+        if (text) {
+          var span = document.createElement('span');
+          span.textContent = String(text);
+          node.appendChild(span);
+        }
+        return node;
+      }
+      window.LWT.ui = { icon: icon, setIcon: setIcon };
     })();
   </script>
 
   <div class="container">
     <header class="app-head">
-      <h1>LocalWorkTracker</h1>
+      <h1><span class="app-logo" aria-hidden="true"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-logo"></use></svg></span>LocalWorkTracker</h1>
+      <nav class="tabbar" id="mainTabbar" aria-label="Hauptbereiche">
+        <button type="button" data-main-tab="time"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Zeit</span></button>
+        <button type="button" data-main-tab="tasks"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-tasks"></use></svg><span>Aufgaben</span></button>
+        <button type="button" data-main-tab="daten"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg><span>Einstellungen</span></button>
+      </nav>
       <div class="app-head-actions">
-        <button type="button" id="themeToggleBtn" class="ghost" title="Hell/Dunkel" aria-label="Farbschema wechseln">🌙</button>
+        <button type="button" id="themeToggleBtn" class="ghost" title="Hell/Dunkel" aria-label="Farbschema wechseln"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg></button>
         <details class="shortcut-help" id="shortcutHelp">
-          <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel">⌨️</summary>
+          <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg></summary>
           <div class="shortcut-list">
             <kbd>Ctrl/⌘ + Enter</kbd><span>Timer starten</span>
             <kbd>Esc</kbd><span>Timer stoppen (mit Rückfrage)</span>
             <kbd>Alt + ←</kbd><span>Vortag</span>
             <kbd>Alt + →</kbd><span>Nächster Tag</span>
             <kbd>Alt + T</kbd><span>Heute</span>
+            <kbd>Ctrl/⌘ + K</kbd><span>Befehlsmenü</span>
           </div>
         </details>
       </div>
@@ -1163,7 +1313,7 @@
         </div>
         <div id="pomodoroBar" class="current pomodoro-bar" aria-live="polite">
           <div class="pomodoro-info">
-            <div class="pill" id="pomodoroPill">⏱ Pomodoro bereit</div>
+            <div class="pill" id="pomodoroPill"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Pomodoro bereit</span></div>
             <div class="pomodoro-controls">
               <select id="pomodoroDuration" aria-label="Pomodoro-Dauer wählen">
                 <option value="5">5 Min.</option>
@@ -1194,13 +1344,8 @@
           <textarea id="notesInput" class="notes-input" maxlength="20000" spellcheck="true" aria-label="Notizen (Markdown, wird nicht gerendert)" placeholder="Freie Notizen, z. B. in Markdown …"></textarea>
         </section>
       </div>
+      <button type="button" id="stickyExpandBtn" class="sticky-expand" aria-expanded="false" aria-label="Leiste ausklappen" title="Leiste ausklappen"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg></button>
     </div>
-
-    <nav class="tabbar" id="mainTabbar" aria-label="Hauptbereiche">
-      <button type="button" data-main-tab="time">⏱ Zeit</button>
-      <button type="button" data-main-tab="tasks">✅ Aufgaben</button>
-      <button type="button" data-main-tab="daten">⚙️ Einstellungen</button>
-    </nav>
 
     <main id="mainViewRoot">
       <section id="tabPanelTime" class="tab-panel">
@@ -1442,9 +1587,19 @@
 
   <div id="toastRoot" role="status" aria-live="polite" aria-atomic="false"></div>
 
+  <dialog id="commandDialog" class="command-dialog" aria-label="Befehlsmenü">
+    <div class="command-search">
+      <svg class="icon" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+      <input id="commandInput" type="text" placeholder="Befehl suchen …" autocomplete="off" spellcheck="false"
+             role="combobox" aria-expanded="true" aria-controls="commandList" aria-autocomplete="list" maxlength="80">
+    </div>
+    <ul id="commandList" class="command-list" role="listbox" aria-label="Befehle"></ul>
+    <div class="command-foot" aria-hidden="true"><span><kbd>↑</kbd> <kbd>↓</kbd> auswählen</span><span><kbd>Enter</kbd> ausführen</span><span><kbd>Esc</kbd> schließen</span></div>
+  </dialog>
+
   <dialog id="pomodoroDoneDialog" class="pomodoro-done" aria-labelledby="pomodoroDoneTitle">
     <div class="pomodoro-done-body">
-      <div class="pomodoro-done-icon" aria-hidden="true">⏰</div>
+      <div class="pomodoro-done-icon" aria-hidden="true"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg></div>
       <h2 id="pomodoroDoneTitle">Pomodoro abgelaufen!</h2>
       <p>Zeit für eine Pause.</p>
       <p class="pomodoro-done-time" id="pomodoroDoneTime"></p>
@@ -1642,7 +1797,7 @@
         dom.pomodoroStartBtn.disabled = running;
         dom.pomodoroStopBtn.disabled = !running;
         if (!running) {
-          dom.pomodoroPill.textContent = '⏱ Pomodoro bereit';
+          window.LWT.ui.setIcon(dom.pomodoroPill, 'clock', 'Pomodoro bereit');
           dom.pomodoroPill.classList.remove('pending');
           dom.pomodoroDisplay.textContent = formatPomodoroClock(pomodoro.minutes * 60000);
           dom.pomodoroSubtitle.textContent = 'Bereit';
@@ -1979,7 +2134,7 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'copy-btn';
-        btn.textContent = '⧉';
+        btn.appendChild(window.LWT.ui.icon('copy'));
         btn.title = 'Ticketnummer kopieren';
         btn.setAttribute('aria-label', `Ticketnummer ${ticket} kopieren`);
         btn.addEventListener('click', async () => {
@@ -3086,9 +3241,10 @@
         if (!ticketRows.length) {
           dom.summaryContainer.innerHTML = '';
           const empty = document.createElement('div');
-          empty.className = 'empty';
+          empty.className = 'empty with-icon';
+          empty.appendChild(window.LWT.ui.icon('chart'));
           const weekRange = `${range.from.toLocaleDateString('de-DE')} – ${range.to.toLocaleDateString('de-DE')}`;
-          empty.textContent = `Keine Daten für die Woche ${weekRange}.`;
+          empty.appendChild(document.createTextNode(`Keine Daten für die Woche ${weekRange}.`));
           wrap.appendChild(empty);
           dom.summaryContainer.appendChild(wrap);
           return;
@@ -3317,7 +3473,8 @@
       }
 
       function getCssVar(name) {
-        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        // Read from <body>: the light theme overrides tokens on body[data-theme], not on :root.
+        return getComputedStyle(document.body).getPropertyValue(name).trim();
       }
 
       function roundRect(ctx, x, y, w, h, r) {
@@ -4659,15 +4816,29 @@
         return node;
       }
 
+      // opts.icon: sprite name (see #iconSprite) rendered before the label;
+      // icon-only buttons pass label '' and must supply an aria-label.
       function button(label, opts = {}) {
-        const b = el('button', { text: label, className: opts.className || '', type: 'button', title: opts.title });
+        const cls = (opts.className || '') + (opts.icon && !label ? (opts.className ? ' ' : '') + 'icon-only' : '');
+        const b = el('button', { text: opts.icon ? null : label, className: cls, type: 'button', title: opts.title });
+        if (opts.icon) window.LWT.ui.setIcon(b, opts.icon, label);
         if (opts.onClick) b.addEventListener('click', opts.onClick);
         if (opts.attrs) Object.entries(opts.attrs).forEach(([k, v]) => b.setAttribute(k, v));
         return b;
       }
 
-      function pill(text, className) {
-        return el('span', { className: 'pill' + (className ? ' ' + className : ''), text });
+      function pill(text, className, iconName) {
+        const node = el('span', { className: 'pill' + (className ? ' ' + className : ''), text: iconName ? null : text });
+        if (iconName) window.LWT.ui.setIcon(node, iconName, text);
+        return node;
+      }
+
+      // Shared empty-state block: icon above a single line of text.
+      function emptyState(text, iconName) {
+        const node = el('div', { className: 'empty' + (iconName ? ' with-icon' : '') });
+        if (iconName) node.appendChild(window.LWT.ui.icon(iconName));
+        node.appendChild(el('div', { text }));
+        return node;
       }
 
       function clear(node) {
@@ -4843,7 +5014,7 @@
         if (task.carryCount > 0) meta.appendChild(pill(`${task.carryCount}× verschoben`));
         if (trackingEnabled()) {
           const tracked = window.LWT.time.getTrackedMinutesLabel(task.id);
-          if (tracked) meta.appendChild(pill('⏱ ' + tracked));
+          if (tracked) meta.appendChild(pill(tracked, '', 'clock'));
         }
         meta.appendChild(el('span', { text: 'erfasst ' + relativeDays(task.createdAt, now) }));
         if (addEffort) meta.appendChild(addEffort);
@@ -4875,7 +5046,8 @@
       }
 
       function copyButton(getText, what) {
-        return button('⧉', {
+        return button('', {
+          icon: 'copy',
           className: 'icon-btn copy-btn',
           title: what + ' kopieren',
           attrs: { 'aria-label': what + ' kopieren' },
@@ -4951,7 +5123,8 @@
         const list = items.filter(Boolean);
         if (!list.length) return null;
         const menu = el('details', { className: 'card-menu' });
-        const summary = el('summary', { text: '⋯', title: 'Weitere Aktionen', attrs: { 'aria-label': 'Weitere Aktionen' } });
+        const summary = el('summary', { title: 'Weitere Aktionen', attrs: { 'aria-label': 'Weitere Aktionen' } });
+        summary.appendChild(window.LWT.ui.icon('more'));
         menu.appendChild(summary);
         const box = el('div', { className: 'card-menu-list', attrs: { role: 'menu' } });
         list.forEach(item => {
@@ -5240,7 +5413,8 @@
       }
 
       function backlogIconButton(task) {
-        return button('↩\uFE0E', {
+        return button('', {
+          icon: 'undo',
           className: 'icon-btn',
           title: 'Ins Backlog',
           attrs: { 'aria-label': 'Ins Backlog' },
@@ -5261,15 +5435,18 @@
           check: { onClick: () => completeTask(task.id), title: 'Erledigt' }
         });
 
-        const star = button(task.todayFlag ? '★' : '☆', {
+        const starTitle = task.todayFlag ? 'Aus dem Heute-Fokus nehmen' : 'In den Heute-Fokus nehmen';
+        const star = button('', {
+          icon: task.todayFlag ? 'star-filled' : 'star',
           className: 'icon-btn star-btn' + (task.todayFlag ? ' on' : ''),
-          title: task.todayFlag ? 'Aus dem Heute-Fokus nehmen' : 'In den Heute-Fokus nehmen',
-          attrs: { 'aria-pressed': task.todayFlag ? 'true' : 'false' },
+          title: starTitle,
+          attrs: { 'aria-pressed': task.todayFlag ? 'true' : 'false', 'aria-label': starTitle },
           onClick: () => toggleToday(task.id)
         });
         hover.appendChild(star);
         if (trackingEnabled()) {
-          hover.appendChild(button('▶', {
+          hover.appendChild(button('', {
+            icon: 'play',
             className: 'icon-btn primary',
             title: 'Timer für diese Aufgabe starten',
             attrs: { 'aria-label': 'Timer für diese Aufgabe starten' },
@@ -5281,7 +5458,8 @@
         }
 
         const nextWeek = shortWeek(weekKeyOffset(task.plannedWeek, 1));
-        hover.appendChild(button('⏭\uFE0E', {
+        hover.appendChild(button('', {
+          icon: 'skip',
           className: 'icon-btn',
           title: `In ${nextWeek} verschieben`,
           attrs: { 'aria-label': `In ${nextWeek} verschieben` },
@@ -5363,13 +5541,15 @@
           const left = Math.ceil((task.doneAt + ARCHIVE_RETENTION_DAYS * DAY_MS - now) / DAY_MS);
           if (left <= 7) meta.appendChild(el('span', { className: 'purge-soon', text: left <= 1 ? 'wird morgen gelöscht' : `wird in ${left} Tagen gelöscht` }));
         }
-        hover.appendChild(button('↺', {
+        hover.appendChild(button('', {
+          icon: 'reopen',
           className: 'icon-btn',
           title: 'Wieder aufnehmen',
           attrs: { 'aria-label': 'Wieder aufnehmen' },
           onClick: () => reopenTask(task.id)
         }));
-        hover.appendChild(button('🗑', {
+        hover.appendChild(button('', {
+          icon: 'trash',
           className: 'icon-btn',
           title: 'Löschen',
           attrs: { 'aria-label': 'Löschen' },
@@ -5503,7 +5683,8 @@
           if (ev.key === 'Enter') { ev.preventDefault(); doCapture(); }
         }));
         submit.addEventListener('click', doCapture);
-        const notesToggle = button('📝', {
+        const notesToggle = button('', {
+          icon: 'note',
           className: 'icon-btn',
           title: ui.captureNotesOpen ? 'Notiz ausblenden' : 'Notiz hinzufügen',
           attrs: { 'aria-label': 'Notiz hinzufügen', 'aria-pressed': ui.captureNotesOpen ? 'true' : 'false' },
@@ -5547,7 +5728,7 @@
           ]));
         }
         if (!tasks.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Posteingang leer. Alles bewertet.' }));
+          panel.appendChild(emptyState('Posteingang leer. Alles bewertet.', 'inbox'));
         } else {
           const list = el('div', { className: 'task-list' });
           list.style.marginTop = '10px';
@@ -5562,11 +5743,11 @@
         const frag = document.createDocumentFragment();
         const isCurrent = ui.weekKey === currentWeekKey();
 
-        const navPanel = el('section', { className: 'panel' });
+        const navPanel = el('section', { className: 'panel panel-slim week-bar' });
         const nav = el('div', { className: 'week-nav' });
-        nav.appendChild(button('◀', { title: 'Vorherige Woche', onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, -1); render(); } }));
+        nav.appendChild(button('', { icon: 'chevron-left', title: 'Vorherige Woche', attrs: { 'aria-label': 'Vorherige Woche' }, onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, -1); render(); } }));
         nav.appendChild(el('div', { className: 'week-label', text: formatWeekLabel(ui.weekKey) }));
-        nav.appendChild(button('▶', { title: 'Nächste Woche', onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, 1); render(); } }));
+        nav.appendChild(button('', { icon: 'chevron-right', title: 'Nächste Woche', attrs: { 'aria-label': 'Nächste Woche' }, onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, 1); render(); } }));
         const todayBtn = button('Diese Woche', {
           className: 'week-today' + (isCurrent ? '' : ' primary'),
           onClick: () => { ui.weekKey = currentWeekKey(); render(); }
@@ -5612,7 +5793,7 @@
         const heading = [el('h2', { text: `Geplant für ${shortWeek(ui.weekKey)} (${planned.length})` })];
         panel.appendChild(el('div', { className: 'panel-head' }, heading));
         if (!planned.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.' }));
+          panel.appendChild(emptyState('Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.', 'calendar'));
         } else {
           renderGroups(panel, planned, (t, n) => renderPlannedCard(t, n), now, { reorderable: true });
         }
@@ -5624,7 +5805,7 @@
         const frag = document.createDocumentFragment();
         const all = backlogTasks();
 
-        const filterPanel = el('section', { className: 'panel' });
+        const filterPanel = el('section', { className: 'panel panel-slim' });
         const filters = el('div', { className: 'filter-row' });
 
         const makeSelect = (labelText, value, options, onChange) => {
@@ -5677,10 +5858,10 @@
         ]));
         panel.appendChild(el('p', { className: 'hint', text: `„→ ${shortWeek(ui.weekKey)}" plant in die Woche, die im Tab „Woche" gerade ausgewählt ist.` }));
         if (!tasks.length) {
-          panel.appendChild(el('div', {
-            className: 'empty',
-            text: all.length ? 'Keine Aufgabe passt zu den Filtern.' : 'Backlog leer. Bewertete Aufgaben ohne Wochenzuordnung landen hier.'
-          }));
+          panel.appendChild(emptyState(
+            all.length ? 'Keine Aufgabe passt zu den Filtern.' : 'Backlog leer. Bewertete Aufgaben ohne Wochenzuordnung landen hier.',
+            all.length ? 'search' : 'inbox'
+          ));
         } else {
           renderGroups(panel, tasks, renderBacklogCard, now);
         }
@@ -5697,7 +5878,7 @@
         ]));
         panel.appendChild(el('p', { className: 'hint', text: `Abgeschlossene Aufgaben werden ${ARCHIVE_RETENTION_DAYS} Tage nach Abschluss automatisch gelöscht. Backups behalten den älteren Stand.` }));
         if (!tasks.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Noch nichts abgeschlossen.' }));
+          panel.appendChild(emptyState('Noch nichts abgeschlossen.', 'archive'));
           frag.appendChild(panel);
           return frag;
         }
@@ -5759,7 +5940,7 @@
           el('h2', { text: `Suche: ${hits.length} Treffer` })
         ]));
         if (!hits.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Keine Aufgabe gefunden.' }));
+          panel.appendChild(emptyState('Keine Aufgabe gefunden.', 'search'));
         }
         SEARCH_GROUPS.forEach(groupDef => {
           const tasks = hits.filter(groupDef.match).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -6020,7 +6201,7 @@
       function updateThemeButton() {
         var isLight = document.body.getAttribute('data-theme') === 'light';
         if (!themeToggleBtn) return;
-        themeToggleBtn.textContent = isLight ? '☀️' : '🌙';
+        window.LWT.ui.setIcon(themeToggleBtn, isLight ? 'sun' : 'moon');
         themeToggleBtn.setAttribute('aria-pressed', isLight ? 'true' : 'false');
       }
       updateThemeButton();
@@ -6323,6 +6504,261 @@
           if (window.LWT.notes) window.LWT.notes.clearAllData();
           showToast('Alle Daten gelöscht.', { variant: 'warn' });
           refreshBackupInfo();
+        });
+      }
+
+      /* ── Compact sticky bar on scroll ────────────────────────── */
+      // Desktop only (the bar is position: static ≤1050px). Collapses the
+      // bar to one row once the page is scrolled past the header; the lost
+      // height is added back as margin-bottom so the flow (and the scroll
+      // position) stays identical and nothing jumps. #stickyExpandBtn opens
+      // it again until the user scrolls a bit further.
+      var stickyBar = document.querySelector('.current-row.sticky-bar');
+      var stickyExpandBtn = qs('stickyExpandBtn');
+      var appHead = document.querySelector('.app-head');
+      var stickyWideMq = window.matchMedia('(min-width: 1051px)');
+      var stickyManualOpen = false;
+      var stickyManualOpenY = 0;
+      var stickyFrame = 0;
+      function stickyFocusInHiddenPart() {
+        var active = document.activeElement;
+        if (!active || !stickyBar.contains(active)) return false;
+        return active.id !== 'quickCaptureInput' && active.id !== 'quickCaptureBtn' &&
+          active.id !== 'stopBtn' && active.id !== 'stickyExpandBtn' &&
+          active.id !== 'pomodoroStartBtn' && active.id !== 'pomodoroStopBtn';
+      }
+      // Compact only this far past the header, expand again only above the
+      // header: the gap (hysteresis) means a 1px scroll correction near the
+      // boundary can never flip the state back and forth.
+      var STICKY_COMPACT_OFFSET = 48;
+      var stickyFullHeight = 0;
+      var stickyToggling = false;
+      var stickyLastCompact = null;
+      function stickyHeight() { return stickyBar.getBoundingClientRect().height; }
+      function setStickyCompensation() {
+        // Fractional heights (not offsetHeight) so the flow stays identical
+        // to the sub-pixel — any leftover difference would shift content.
+        var lost = Math.max(0, stickyFullHeight - stickyHeight());
+        stickyBar.style.marginBottom = lost ? lost + 'px' : '';
+      }
+      function syncActiveTimerClass() {
+        var active = !!(window.LWT.time && isTimeTrackingEnabled() && window.LWT.time.getActiveTimer());
+        if (active === stickyBar.classList.contains('has-active-timer')) return;
+        stickyBar.classList.toggle('has-active-timer', active);
+        if (stickyBar.classList.contains('is-compact')) setStickyCompensation();
+      }
+      function applyStickyState(forceCompact) {
+        stickyFrame = 0;
+        if (!stickyBar) return;
+        syncActiveTimerClass();
+        var y = window.scrollY;
+        var threshold = appHead ? appHead.getBoundingClientRect().bottom + y : 0;
+        var wide = stickyWideMq.matches;
+        var stuck = wide && y > threshold;
+        var wasCompact = stickyBar.classList.contains('is-compact');
+        if (!stuck) stickyManualOpen = false;
+        else if (stickyManualOpen && Math.abs(y - stickyManualOpenY) > 160 && !stickyFocusInHiddenPart()) stickyManualOpen = false;
+        var compact;
+        if (!wide || stickyManualOpen) compact = false;
+        else if (forceCompact === true) compact = stuck;
+        else if (wasCompact) compact = y >= threshold;              // stay compact until back above the header
+        else compact = y > threshold + STICKY_COMPACT_OFFSET && !stickyFocusInHiddenPart();
+        stickyBar.classList.toggle('is-stuck', stuck);
+        if (compact !== wasCompact) {
+          // Our own toggle may trigger a scroll event (e.g. a clamped
+          // scroll position); ignore it for one frame so it can't re-flip.
+          stickyToggling = true;
+          // Measuring the compact height forces a layout while the flow is
+          // still unbalanced (bar already short, margin not yet set). With
+          // scroll anchoring on, the browser "corrects" that by scrolling up
+          // by the lost height — back above the threshold, so the bar
+          // expands again and the page jumps up and down (seen in Firefox
+          // and Chromium with wheel scrolling). Anchoring is switched off
+          // document-wide for the duration of the toggle.
+          var root = document.documentElement;
+          root.style.overflowAnchor = 'none';
+          requestAnimationFrame(function () {
+            root.style.overflowAnchor = '';
+            stickyToggling = false;
+            scheduleStickyState();
+          });
+          if (compact) {
+            stickyFullHeight = stickyHeight();
+            stickyBar.classList.add('is-compact');
+            setStickyCompensation();
+          } else {
+            stickyBar.classList.remove('is-compact');
+            stickyBar.style.marginBottom = '';
+          }
+        }
+        if (stickyExpandBtn && compact !== stickyLastCompact) {
+          stickyLastCompact = compact;
+          var label = compact ? 'Leiste ausklappen' : 'Leiste einklappen';
+          window.LWT.ui.setIcon(stickyExpandBtn, compact ? 'chevron-down' : 'chevron-up');
+          stickyExpandBtn.setAttribute('aria-label', label);
+          stickyExpandBtn.title = label;
+          stickyExpandBtn.setAttribute('aria-expanded', compact ? 'false' : 'true');
+        }
+      }
+      function scheduleStickyState() {
+        if (stickyToggling || stickyFrame) return;
+        stickyFrame = requestAnimationFrame(function () { applyStickyState(); });
+      }
+      // Opens the full bar while scrolled (used by the handle and by
+      // command-menu entries that focus a field hidden in compact mode).
+      function openStickyBar() {
+        stickyManualOpen = true;
+        stickyManualOpenY = window.scrollY;
+        applyStickyState();
+      }
+      if (stickyBar) {
+        window.addEventListener('scroll', scheduleStickyState, { passive: true });
+        window.addEventListener('resize', scheduleStickyState);
+        if (stickyExpandBtn) {
+          stickyExpandBtn.addEventListener('click', function () {
+            if (stickyBar.classList.contains('is-compact')) {
+              openStickyBar();
+            } else {
+              stickyManualOpen = false;
+              applyStickyState(true);
+            }
+          });
+        }
+        // The timer can start/stop while the bar is compact (▶ on a task
+        // card, Start/Stop, auto-stop) — keep .has-active-timer current.
+        setInterval(function () { if (stickyBar.classList.contains('is-stuck')) syncActiveTimerClass(); }, 1000);
+        applyStickyState();
+      }
+
+      /* ── Command menu (Ctrl/⌘+K) ─────────────────────────────── */
+      // Keyboard launcher over existing actions. Uses only the LWT.* surface
+      // and the centralized sticky-bar/header controls — no module internals.
+      var commandDialog = qs('commandDialog');
+      var commandInput = qs('commandInput');
+      var commandList = qs('commandList');
+      var commandItems = [];
+      var commandIndex = 0;
+
+      function focusLater(id) {
+        setTimeout(function () { var node = qs(id); if (node && !node.disabled) node.focus(); }, 0);
+      }
+      function clickControl(id) {
+        var node = qs(id);
+        if (node && !node.disabled && !node.hidden) node.click();
+      }
+      function buildCommands() {
+        var tracking = isTimeTrackingEnabled();
+        var active = tracking && window.LWT.time ? window.LWT.time.getActiveTimer() : null;
+        var cmds = [];
+        if (tracking) cmds.push({ group: 'Navigation', label: 'Zu „Zeit“ wechseln', icon: 'clock', keywords: 'tab zeiterfassung', run: function () { switchTab('time'); } });
+        cmds.push({ group: 'Navigation', label: 'Zu „Aufgaben“ wechseln', icon: 'tasks', keywords: 'tab todo', run: function () { switchTab('tasks'); } });
+        cmds.push({ group: 'Navigation', label: 'Zu „Einstellungen“ wechseln', icon: 'settings', keywords: 'tab daten backup export import', run: function () { switchTab('daten'); } });
+        cmds.push({ group: 'Aufgaben', label: 'Aufgabe erfassen', icon: 'inbox', keywords: 'neu capture posteingang', run: function () { focusLater('quickCaptureInput'); } });
+        cmds.push({ group: 'Aufgaben', label: 'Aufgaben durchsuchen', icon: 'search', keywords: 'suche finden', run: function () { switchTab('tasks'); focusLater('taskSearch'); } });
+        if (tracking) {
+          if (active) {
+            cmds.push({ group: 'Timer', label: 'Timer stoppen', icon: 'clock', keywords: 'stop beenden', run: function () { clickControl('stopBtn'); } });
+          } else {
+            cmds.push({ group: 'Timer', label: 'Timer starten …', icon: 'play', keywords: 'start ticket', run: function () { openStickyBar(); focusLater('ticketNumber'); } });
+          }
+          var focus = window.LWT.tasks ? window.LWT.tasks.focusTasks() : [];
+          focus.forEach(function (task) {
+            var label = (task.externalRef ? task.externalRef + ': ' : '') + task.title;
+            cmds.push({
+              group: 'Heute im Fokus', label: 'Timer starten: ' + label, icon: 'play', keywords: 'fokus heute',
+              run: function () {
+                window.LWT.time.startTimerFromTask(task.id, task.externalRef || task.title, task.externalRef ? task.title : '', '');
+                switchTab('time');
+              }
+            });
+          });
+        }
+        cmds.push({ group: 'Pomodoro', label: 'Pomodoro starten', icon: 'clock', keywords: 'fokus pause', run: function () { clickControl('pomodoroStartBtn'); } });
+        cmds.push({ group: 'Allgemein', label: 'Notizen öffnen', icon: 'note', keywords: 'notiz scratchpad', run: function () { openStickyBar(); focusLater('notesInput'); } });
+        cmds.push({ group: 'Allgemein', label: 'Farbschema wechseln', icon: 'moon', keywords: 'theme hell dunkel dark light', run: function () { clickControl('themeToggleBtn'); } });
+        if (window.LWT.tasks) cmds.push({ group: 'Allgemein', label: 'Backup jetzt herunterladen', icon: 'archive', keywords: 'sicherung export json', run: function () { window.LWT.tasks.runBackup(true); } });
+        return cmds;
+      }
+      // Every whitespace-separated term must occur in label, group or keywords.
+      function filterCommands(cmds, query) {
+        var terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.length) return cmds;
+        return cmds.filter(function (c) {
+          var hay = (c.label + ' ' + c.group + ' ' + (c.keywords || '')).toLowerCase();
+          return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+        });
+      }
+      function renderCommands() {
+        while (commandList.firstChild) commandList.removeChild(commandList.firstChild);
+        commandItems = filterCommands(buildCommands(), commandInput.value);
+        if (commandIndex >= commandItems.length) commandIndex = Math.max(0, commandItems.length - 1);
+        if (!commandItems.length) {
+          var none = document.createElement('li');
+          none.className = 'cmd-empty';
+          none.textContent = 'Kein Befehl gefunden.';
+          commandList.appendChild(none);
+          commandInput.removeAttribute('aria-activedescendant');
+          return;
+        }
+        commandItems.forEach(function (c, i) {
+          var li = document.createElement('li');
+          li.id = 'cmd-' + i;
+          li.setAttribute('role', 'option');
+          li.setAttribute('aria-selected', i === commandIndex ? 'true' : 'false');
+          li.appendChild(window.LWT.ui.icon(c.icon));
+          var label = document.createElement('span');
+          label.className = 'cmd-label';
+          label.textContent = c.label;
+          li.appendChild(label);
+          var group = document.createElement('span');
+          group.className = 'cmd-group';
+          group.textContent = c.group;
+          li.appendChild(group);
+          li.addEventListener('mousemove', function () { if (commandIndex !== i) { commandIndex = i; renderCommands(); } });
+          li.addEventListener('click', function () { runCommand(i); });
+          commandList.appendChild(li);
+        });
+        commandInput.setAttribute('aria-activedescendant', 'cmd-' + commandIndex);
+        var sel = qs('cmd-' + commandIndex);
+        if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+      }
+      function runCommand(i) {
+        var c = commandItems[i];
+        if (!c) return;
+        commandDialog.close();
+        c.run();
+      }
+      function openCommandMenu() {
+        if (!commandDialog || commandDialog.open) return;
+        if (document.querySelector('dialog[open]')) return; // never stack over a confirm/edit dialog
+        commandInput.value = '';
+        commandIndex = 0;
+        renderCommands();
+        commandDialog.showModal();
+        commandInput.focus();
+      }
+      if (commandDialog && commandInput && commandList) {
+        commandInput.addEventListener('input', function () { commandIndex = 0; renderCommands(); });
+        commandInput.addEventListener('keydown', function (ev) {
+          if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            ev.preventDefault();
+            if (!commandItems.length) return;
+            var step = ev.key === 'ArrowDown' ? 1 : -1;
+            commandIndex = (commandIndex + step + commandItems.length) % commandItems.length;
+            renderCommands();
+          } else if (ev.key === 'Enter') {
+            ev.preventDefault();
+            runCommand(commandIndex);
+          }
+        });
+        // Click on the backdrop (outside the dialog box) closes it.
+        commandDialog.addEventListener('click', function (ev) { if (ev.target === commandDialog) commandDialog.close(); });
+        document.addEventListener('keydown', function (ev) {
+          if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === 'k' || ev.key === 'K')) {
+            ev.preventDefault();
+            if (commandDialog.open) commandDialog.close();
+            else openCommandMenu();
+          }
         });
       }
     })();

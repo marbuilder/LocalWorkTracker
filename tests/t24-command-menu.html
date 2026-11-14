@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>T24 command menu</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; line-height: 1.45; }
+    code, pre { background: #f4f6f8; padding: 2px 6px; border-radius: 6px; }
+    .pass { color: #0a7a3d; }
+    .fail { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    td, th { border: 1px solid #d7dce2; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef2f6; }
+  </style>
+</head>
+<body>
+  <h1>T24 Command Menu (filterCommands / keyboard selection)</h1>
+  <p>Pins the AppShell command menu (Ctrl/⌘+K): <code>filterCommands(cmds, query)</code> keeps a command only when every whitespace-separated term occurs (case-insensitively) in its label, group or keywords, and arrow-key selection wraps around. Also checks the <code>buildCommands</code> rules for the Zeittracking toggle and the running timer. Logic is duplicated inline from <code>index.html</code>'s AppShell, per project convention.</p>
+
+  <div id="status">Running checks…</div>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Result</th><th>Details</th></tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+
+  <script>
+    (() => {
+      const results = [];
+      function assert(name, cond, details) {
+        results.push({ name, pass: !!cond, details: details === undefined ? '' : JSON.stringify(details) });
+      }
+
+      // ── Mirrors index.html AppShell ──
+      function filterCommands(cmds, query) {
+        var terms = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+        if (!terms.length) return cmds;
+        return cmds.filter(function (c) {
+          var hay = (c.label + ' ' + c.group + ' ' + (c.keywords || '')).toLowerCase();
+          return terms.every(function (t) { return hay.indexOf(t) !== -1; });
+        });
+      }
+      const step = (index, dir, len) => (index + dir + len) % len;
+      // Reduced buildCommands: only the conditional parts.
+      function buildCommands(tracking, activeTimer, focus) {
+        const cmds = [];
+        if (tracking) cmds.push({ group: 'Navigation', label: 'Zu „Zeit“ wechseln', keywords: 'tab zeiterfassung' });
+        cmds.push({ group: 'Navigation', label: 'Zu „Aufgaben“ wechseln', keywords: 'tab todo' });
+        if (tracking) {
+          cmds.push(activeTimer
+            ? { group: 'Timer', label: 'Timer stoppen', keywords: 'stop beenden' }
+            : { group: 'Timer', label: 'Timer starten …', keywords: 'start ticket' });
+          focus.forEach(t => cmds.push({ group: 'Heute im Fokus', label: 'Timer starten: ' + (t.externalRef ? t.externalRef + ': ' : '') + t.title, keywords: 'fokus heute' }));
+        }
+        cmds.push({ group: 'Allgemein', label: 'Farbschema wechseln', keywords: 'theme hell dunkel dark light' });
+        return cmds;
+      }
+      const labels = list => list.map(c => c.label);
+
+      const focus = [{ externalRef: 'ABC-123', title: 'Release-Notes' }, { externalRef: '', title: 'Code-Review' }];
+      const all = buildCommands(true, null, focus);
+
+      assert('empty query returns every command', filterCommands(all, '   ').length === all.length, labels(all));
+      assert('matching is case-insensitive', labels(filterCommands(all, 'FARB')).join() === 'Farbschema wechseln', labels(filterCommands(all, 'FARB')));
+      assert('keywords match too (dark → Farbschema)', labels(filterCommands(all, 'dark')).join() === 'Farbschema wechseln');
+      assert('group names match (fokus → both focus tasks)', filterCommands(all, 'fokus').length === 2, labels(filterCommands(all, 'fokus')));
+      const multi = filterCommands(all, 'timer abc');
+      assert('all terms must match (timer + abc → one task)', multi.length === 1 && multi[0].label === 'Timer starten: ABC-123: Release-Notes', labels(multi));
+      assert('no match yields an empty list', filterCommands(all, 'xyzq').length === 0);
+
+      const noTracking = buildCommands(false, null, focus);
+      assert('Zeittracking off hides the Zeit tab and all timer commands', !labels(noTracking).some(l => /Zeit“|Timer/.test(l)), labels(noTracking));
+      const running = buildCommands(true, { id: 'x' }, []);
+      assert('a running timer offers "Timer stoppen" instead of "Timer starten …"', labels(running).includes('Timer stoppen') && !labels(running).includes('Timer starten …'), labels(running));
+
+      assert('ArrowDown wraps from last to first', step(4, 1, 5) === 0);
+      assert('ArrowUp wraps from first to last', step(0, -1, 5) === 4);
+
+      const tbody = document.getElementById('results');
+      let passCount = 0;
+      results.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = r.name;
+        const tdResult = document.createElement('td');
+        tdResult.textContent = r.pass ? 'PASS' : 'FAIL';
+        tdResult.className = r.pass ? 'pass' : 'fail';
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = r.details;
+        tr.append(tdName, tdResult, tdDetails);
+        tbody.appendChild(tr);
+        if (r.pass) passCount++;
+      });
+      document.getElementById('status').textContent =
+        `${passCount}/${results.length} checks passed.`;
+    })();
+  </script>
+</body>
+</html>

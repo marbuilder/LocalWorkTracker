@@ -12,10 +12,10 @@ LocalWorkTracker is LocalTasks and LocalTimetracker pushed into one `index.html`
 
 | # | Lines (current) | Role | Defines |
 |---|---|---|---|
-| 1 | ~812–856 | **Boot** | Legacy-key migration, initial theme (before first paint) |
+| 1 | ~812–856 | **Boot** | Legacy-key migration, initial theme (before first paint), shared icon helper | `window.LWT.ui` |
 | 2 | ~1214–3194 | **TimeModule** | Timer, Pomodoro, manual entries, filters/stats/chart, snapshots, ticket presets | `window.LWT.time` |
 | 3 | ~3196–4739 | **TaskModule** | Inbox/Triage/Woche/Backlog/Archiv, escalation, daily backup | `window.LWT.tasks` |
-| 4 | ~4874–5063 | **AppShell** | Main-tab switching, theme toggle, Einstellungen tab (formerly "Daten"), Zeittracking feature toggle, Notiz-Widget (Sticky-Bar) | `window.LWT.shell`, `window.LWT.notes` |
+| 4 | ~4874–5063 | **AppShell** | Main-tab switching, theme toggle, Einstellungen tab (formerly "Daten"), Zeittracking feature toggle, Notiz-Widget (Sticky-Bar), command menu (Ctrl/⌘+K) | `window.LWT.shell`, `window.LWT.notes` |
 
 Line numbers drift as the file is edited — treat the table as "which script, in which order", and re-`grep -n "<script>"` if you need exact numbers. Order matters: TimeModule must load before TaskModule (TaskModule's card rendering reads `window.LWT.time` while rendering), and both must load before AppShell (AppShell wires buttons that call into both).
 
@@ -49,8 +49,11 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Zeittracking feature toggle (`#timeTrackingToggle` in the Einstellungen tab) — hides the Zeit tab button, `#currentTimer` (not `#pomodoroBar`, which stays visible/usable regardless) and the task-card timer pill/▶ button; never touches stored data | `isTimeTrackingEnabled`, `setTimeTrackingEnabled`, `applyTimeTrackingVisibility` (AppShell); consumed via `window.LWT.shell.isTimeTrackingEnabled()` by TaskModule's `taskMeta()`/`renderPlannedCard` guards and TimeModule's `handleGlobalShortcut` | AppShell, consumed by TaskModule + TimeModule |
 | Notiz-Widget (Sticky-Bar, freies Markdown ohne Rendering) | `sanitizeNotes`, `loadNotes`/`saveNotes`, `scheduleNotesSave`/`flushNotesSave`, `setNotesStatus` | AppShell |
 | Legacy storage migration | `LEGACY_MAP` copy loop | Boot |
+| Icons (inline SVG sprite `#iconSprite`, `<symbol id="i-…">`) | `icon(name)`, `setIcon(node, name, text)` → `window.LWT.ui`; TaskModule's `button(label, { icon })`, `pill(text, className, iconName)`, `emptyState(text, iconName)` | Boot, consumed by all modules |
+| Compact sticky bar on scroll (`.is-stuck`/`.is-compact`, `#stickyExpandBtn`) | `applyStickyState`, `scheduleStickyState`, `openStickyBar`, `stickyFocusInHiddenPart` | AppShell |
+| Command menu (Ctrl/⌘+K, `#commandDialog`) — keyboard launcher over existing actions (tab switch, quick capture, task search, timer start/stop, start a timer on a "Heute im Fokus" task, Pomodoro, notes, theme, backup) | `buildCommands`, `filterCommands`, `renderCommands`, `runCommand`, `openCommandMenu` | AppShell |
 
-Spacing is centralized in two CSS custom properties, `--gap-outer` (panel-to-panel) and `--gap-inner` (inside a panel), defined once per `:root` block (TimeModule's and TaskModule's) — see "CSS" below.
+Spacing, radius, elevation, typography and colors are centralized in CSS custom properties (design tokens) defined once at the top of the stylesheet — see "CSS" below.
 
 Each of scripts 2 and 3 is its own `(() => { 'use strict'; ... })();` — a private closure. They do not share variables. All cross-module communication goes through the `window.LWT.*` surface below.
 
@@ -80,6 +83,10 @@ window.LWT = {
   shell: {
     switchTab(name),                // 'time' | 'tasks' | 'daten'
     isTimeTrackingEnabled()         // reads the Zeittracking feature toggle; consumed by TaskModule's guards and TimeModule's handleGlobalShortcut
+  },
+  ui: {                             // defined by Boot, so it exists before any module renders
+    icon(name, className?),         // <svg class="icon"><use href="#i-name"></svg>, aria-hidden, built with createElementNS
+    setIcon(node, name, text?)      // replaces node's children with [icon][<span>text</span>] (textContent only)
   },
   notes: {
     getExportPayload(),   // { text, updatedAt } — read by TaskModule's combined backup
@@ -111,10 +118,12 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
 
 ```
 <body>
-  <script> boot: migration + initial theme </script>
+  <svg id="iconSprite">                        -- hidden inline SVG sprite, one <symbol id="i-…"> per icon (clock, tasks, settings, sun, moon, keyboard, play, star, star-filled, trash, copy, note, chevron-left/right, skip, undo, reopen, more, inbox, calendar, archive, search, chart, logo)
+  <script> boot: migration + initial theme + LWT.ui icon helper </script>
 
   <div class="container">
-    <header class="app-head">                 -- title, #themeToggleBtn, #shortcutHelp (Zeit-only keyboard-shortcut popover, right of the theme toggle) (AppShell-owned)
+    <header class="app-head">                 -- one row (3-column grid): title with .app-logo | #mainTabbar | .app-head-actions (#themeToggleBtn, #shortcutHelp keyboard-shortcut popover) (AppShell-owned); ≤700px the tabs wrap to a full-width second row
+      <nav id="mainTabbar">                    -- 3 buttons (icon + label), data-main-tab="time"|"tasks"|"daten" (AppShell-owned); the "time" button is `hidden` by `applyTimeTrackingVisibility()` when the Zeittracking feature toggle is off
     <div id="task-backupBanner" hidden>        -- rendered by TaskModule, placed in the header so it's visible from either tab
     <div class="current-row sticky-bar">        -- sticky bar (stickiness lives here, not on the individual widgets — see "CSS" below), always visible on every main tab, two `.current-side` columns:
       <div class="current-side current-side-main">   -- AppShell-owned wrapper, stacks the following three:
@@ -123,15 +132,16 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
         <div id="pomodoroBar">                 -- TimeModule-owned, unchanged markup/JS from LocalTimetracker; always visible regardless of the Zeittracking feature toggle
       <div class="current-side current-side-aside">  -- AppShell-owned wrapper, holds:
         <section id="notesWidget">              -- AppShell-owned; #notesTitle, #notesStatus (save-state indicator, aria-hidden), #notesInput — a plain `<textarea>`, no Markdown rendering, no edit/preview toggle; autosaves debounced via LWT.notes
-    <nav id="mainTabbar">                      -- 3 buttons, data-main-tab="time"|"tasks"|"daten" (AppShell-owned); the "time" button is `hidden` by `applyTimeTrackingVisibility()` when the Zeittracking feature toggle is off
+      <button id="stickyExpandBtn">            -- AppShell-owned handle under the bar (absolutely positioned, shown only while scrolled/stuck): collapses/expands the compact bar
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
       <section id="tabPanelTasks" hidden>      -- .task-toolbar (#task-tabbar + static #taskSearch live-search input) + #task-viewRoot (TaskModule's own inner router)
-      <section id="tabPanelDaten" hidden>      -- Einstellungen tab (button label "⚙️ Einstellungen", `data-main-tab="daten"` kept internally): "Funktionen" panel with `#timeTrackingToggle` (AppShell-owned, the Zeittracking feature toggle) + backup/export/import/clear (AppShell-owned) + relocated Snapshots/Ticket-Presets <details> (TimeModule-owned content, AppShell-owned tab panel) — the one place a tab panel's content isn't wholly owned by the module its name matches
+      <section id="tabPanelDaten" hidden>      -- Einstellungen tab (button label "Einstellungen" with the `i-settings` icon, `data-main-tab="daten"` kept internally): "Funktionen" panel with `#timeTrackingToggle` (AppShell-owned, the Zeittracking feature toggle) + backup/export/import/clear (AppShell-owned) + relocated Snapshots/Ticket-Presets <details> (TimeModule-owned content, AppShell-owned tab panel) — the one place a tab panel's content isn't wholly owned by the module its name matches
     <footer class="app-footer">                -- static GitHub Pages / localStorage-only privacy note (AppShell-owned, no JS)
   </div>
 
   <div id="toastRoot">                         -- shared: both modules' showToast() append here, AppShell has its own copy too
+  <dialog id="commandDialog">                  -- AppShell-owned command menu (Ctrl/⌘+K): #commandInput (combobox, aria-activedescendant) + #commandList (listbox, items rebuilt per keystroke)
   <dialog id="taskPromptDialog">, <dialog id="taskConfirmDialog">     -- TaskModule (renamed from promptDialog/confirmDialog)
   <dialog id="timeEditDialog">, <datalist id="ticketSuggestions">, <dialog id="timeConfirmDialog">  -- TimeModule (renamed from editDialog/confirmDialog)
 
@@ -157,7 +167,7 @@ Both source apps used identical ids for conceptually different things. Renamed o
 | `#confirmDialog` | `#taskConfirmDialog` | `#confirmDialog` | `#timeConfirmDialog` |
 | — | — | `#editDialog` | `#timeEditDialog` |
 
-Not renamed, deliberately centralized (one instance, owned by AppShell, both modules point their `getElementById` at the same node): `#themeToggleBtn`, `#toastRoot`, and the Daten-tab controls (`#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`).
+Not renamed, deliberately centralized (one instance, owned by AppShell, both modules point their `getElementById` at the same node): `#themeToggleBtn`, `#toastRoot`, `#iconSprite` (Boot-adjacent static markup, read via `LWT.ui.icon`), and the Daten-tab controls (`#lastBackupInfo`, `#backupIntervalSelect`, `#backupNowBtn`, `#exportJsonBtn`, `#exportTasksCsvBtn`, `#exportTimeCsvBtn`, `#importBtn`/`#importFile`, `#clearAllBtn`).
 
 **Removed entirely** from both modules' markup and JS wiring, because AppShell's Daten tab replaced them: LocalTasks' own theme toggle + `<details id="dataMenu">` block; LocalTimetracker's own theme toggle + its "Import / Export & Datenverwaltung" `<details>` block.
 
@@ -165,11 +175,33 @@ The header `#dataMenu` dropdown that AppShell introduced at merge time was itsel
 
 ## CSS
 
-One `<style>` block (lines 8–809): LocalTimetracker's stylesheet (has the chart `--chart-*` variables) followed by LocalTasks' stylesheet (adds `.tabbar`, `.task-card`, `.chip-group`, etc.), followed by a small `shell` section (`#mainTabbar`, `.tab-panel[hidden]`). The two base stylesheets are ~90% identical (`--bg`, `--panel`, `--accent`, `--border`, `--muted`, button/input/dialog/toast styles, `panel`/`row`/`field` grid system) — duplicate rules are harmless since the values agree. `.tabbar` is reused as-is for **both** the main Zeit/Aufgaben tabs and TaskModule's inner Posteingang/Woche/Backlog/Archiv tabs — same visual language, no separate "main tab" styling needed beyond what's in the `shell` section.
+One `<style>` block, organized top-down: **design tokens** → base/layout → form grid, buttons, tab bars, chips, pills, tables, popovers → sticky bar → Zeit tab (TimeModule) → Aufgaben tab (TaskModule) → shared feedback (empty states, toasts, dialogs, command menu) → breakpoints. It used to be the two source apps' stylesheets concatenated (with every base rule and both theme variable sets defined twice); they were merged into one, so each selector now has exactly one definition — edit it in place rather than adding an override further down.
 
-Spacing between boxes is driven by two custom properties defined in **both** `:root` blocks (so Time and Task stay pixel-identical): `--gap-outer` (24px — `.container`, `.app-head`, `.grid`, `#viewRoot`, the space between panels) and `--gap-inner` (16px — `.row`, `.stats`, `.filter-row`, `.task-list`, `.task-main`, `.dialog-body`, the space inside a panel). Add new panel-to-panel or inside-panel gaps to the matching variable rather than a new hardcoded value.
+**Design tokens** live in one `:root, body { … }` block (dark theme, the default) and one `body[data-theme="light"] { … }` block that only redefines tokens. They're declared on `body` as well as `:root` so composite tokens (`--shadow-panel`, `--body-gradient`) re-resolve against the light theme's overrides instead of inheriting the dark values. Groups:
+
+- Surfaces/text: `--bg`, `--panel`, `--panel-2`, `--text`, `--muted`, `--border`, `--accent` (indigo), `--accent-fg` (text on a solid accent), `--accent-soft` (focus ring), `--good`/`--warn`/`--bad`, `--th-bg`/`--th-text`, `--btn-bg`/`--btn-bg-hover`, `--seg-active-bg` (raised segment in a segmented control), `--current-bg`/`--current-border` (sticky bar, focus cards).
+- Solid buttons: `--btn-{primary,good,warn,bad}-{bg,hover}`, `--btn-solid-fg` — used by `button.primary/.good/.warn/.bad`.
+- Status tones: `--tone-{good,warn,bad,neutral,accent}-{bg,fg,border}` — every tinted pill, active chip, star button etc. reads these instead of hardcoded rgba values.
+- Chart: `--chart-fill`, `--chart-grid`, `--chart-c1…c8`. TimeModule's `getCssVar` reads them from `<body>` (not `documentElement`), so the light-theme overrides apply to the canvas.
+- Spacing `--gap-outer` (24px — panel-to-panel) / `--gap-inner` (16px — inside a panel); radius `--radius-xs/-sm/-md/-lg/-xl/-pill` (+ `--radius` = 10px); elevation `--shadow-sm/-panel/-pop/-sticky/-dialog`, `--backdrop`; type `--font-sans`, `--font-mono`, `--fs-2xs…--fs-3xl`; motion `--ease`, `--dur-fast`, `--dur`.
+
+Add new values as tokens (or reuse one) rather than hardcoding a color, radius, shadow or font size in a component rule.
+
+`.tabbar` is a **segmented control** (recessed `--panel-2` track, active button raised on `--seg-active-bg` with `--shadow-sm`) reused as-is for both `#mainTabbar` and TaskModule's inner Posteingang/Woche/Backlog/Archiv tabs; `.view-toggle` (Liste/Woche) uses the same look. Active `.chips`/`.range-chips` buttons use the accent tone, not a solid fill.
+
+The **Aufgaben tab is deliberately denser** than the Zeit tab: the "Dense Aufgaben tab" block scopes tighter panel padding/gaps, smaller headings and group heads, and slimmer two-line `.task-card`s to `#task-viewRoot`, so the Zeit tab's forms keep their room. `.panel-slim` is a toolbar-like single-row panel used for the week navigation (`renderWeekView`, `.week-bar`) and the backlog filters (`renderBacklogView`).
+
+Avoid `:has()` in a selector *list*: browsers without it (Firefox ESR 115) drop the whole rule. Prefer a class set from JS (e.g. TaskModule's `button()` adds `.icon-only` to icon-only buttons; AppShell sets `.has-active-timer`).
+
+Inside a `.panel` the flex `gap` owns vertical rhythm, so `.panel > *` resets margins, and one rule just above the breakpoints (`.panel > :is(.toolbar, .range-chips, …)`) drops the outer margins of components that also appear outside panels.
+
+**Icons**: `.icon` (sized in `em`, `stroke: currentColor`) styles every `<svg>` from the sprite; filled shapes inside a `<symbol>` set `fill="currentColor"` themselves. Icons are decorative (`aria-hidden`) — icon-only buttons must carry an `aria-label`. Emoji are no longer used as UI icons; glyphs that are part of a label's text (`● Aktiv`, the `✓/✕/↗` archive markers, the `⠿` drag handle, menu checkmarks) are still plain text.
+
+`@media (prefers-reduced-motion: reduce)` turns transitions/animations off globally.
 
 Breakpoints: `1050px` (two-column grids collapse, incl. `.current-row`, for narrow viewports — the sticky bar also drops `position: sticky` here, since a fully stacked bar would otherwise eat too much of a narrow viewport), `700px` (mobile — makes tables card-like, and `.current-controls`'s flex-wrap breaks the timer's compact control row onto a second line). Light theme via `body[data-theme="light"]`, toggled by AppShell only — neither module has its own theme code anymore (see below).
+
+**Compact sticky bar on scroll (desktop, >1050px).** AppShell's `applyStickyState()` (scroll/resize, rAF-throttled) adds `.is-stuck` to `.current-row.sticky-bar` once `window.scrollY` passes the bottom of `.app-head`, and `.is-compact` unless the user re-opened it. Compact mode is pure CSS: one row with `#quickCapture`, a running timer's status + `#stopBtn` (`#currentTimer` is hidden entirely when no `.live-duration` is rendered, i.e. no active timer — and always when Zeittracking is off), and the Pomodoro countdown with its enabled button; `#notesWidget`, the timer form and the Pomodoro duration select are hidden. When collapsing, JS sets `margin-bottom` to the (fractional, `getBoundingClientRect`) height the bar lost, so the document flow and scroll position stay identical. Three things keep this from oscillating: (1) **scroll anchoring is switched off document-wide (`documentElement.style.overflowAnchor = 'none'`) for the frame of the toggle** — measuring the compact height forces a layout while the flow is still unbalanced, and with anchoring on, Firefox and Chromium scrolled up by the lost height (back above the threshold → bar expands → loop); the bar itself also carries `overflow-anchor: none`; (2) **hysteresis** — compact only past `threshold + STICKY_COMPACT_OFFSET` (48px), expand only above the threshold; (3) scroll events during the toggle frame are ignored (`stickyToggling`). `.has-active-timer` on the bar (set by `syncActiveTimerClass`, on every state update and once a second while stuck) decides whether `#currentTimer` shows in compact mode — a class rather than `:has()`, which Firefox ESR 115 lacks. `#stickyExpandBtn` (AppShell-owned handle centred under the bar, visible only while `.is-stuck`) toggles it; `openStickyBar()` keeps it open until the user scrolls 160px further, and is also called by the command menu's "Notizen öffnen"/"Timer starten …" so they never focus a hidden field. The bar also never collapses while focus is inside a part compact mode would hide (`stickyFocusInHiddenPart`).
 
 **Stickiness lives on `.current-row`, not on the individual widgets.** Each of the four widgets used to carry `.sticky-bar` itself (`position: sticky` needs a containing block with real scrollable room to travel in); once they're nested inside the two `.current-side` column wrappers, a widget's containing block would become that wrapper instead of the page, and its travel range would shrink to almost nothing. Hoisting `.sticky-bar` (and its `position: sticky; top: 8px; z-index: 5`) to `.current-row` keeps one sticky unit whose containing block is still `.container`, so the whole bar travels exactly as before.
 
@@ -273,3 +305,5 @@ source (`loadState()`, `importPayload()`, `restoreSnapshot()`):
 - **Touching the sticky bar, tab switching, or the Daten tab?** That's mostly AppShell — the last script block, plain functions (not wrapped in as many closures as the modules, since there's less of it). Exception: `#currentTimer`'s form controls and `renderCurrentTimer()`/`renderPomodoro()` are still TimeModule's — the sticky bar isn't purely an AppShell concern, it has AppShell-owned siblings (`#quickCapture`, `#notesWidget`) sitting next to TimeModule-owned content (`#currentTimer`, `#pomodoroBar`) inside the two `.current-side` columns.
 - **Adding a new cross-module feature?** Add a method to the relevant module's `window.LWT.*` object first, then consume it from the other module or from AppShell. Don't add a fifth script block or a new global unless it's genuinely shell-level (tab/theme/Daten), matching what AppShell already owns.
 - **Renaming or removing a DOM id?** Check the table above first — an id that looks unique might be intentionally shared (`#toastRoot`, `#themeToggleBtn`) or intentionally split (`task-viewRoot` vs the old `viewRoot`).
+- **Adding an icon?** Draw a 24×24 stroke `<symbol id="i-name">` in `#iconSprite` and use `window.LWT.ui.icon('name')` (or `button('', { icon: 'name', attrs: { 'aria-label': … } })` in TaskModule). No emoji, no external icon set.
+- **Adding a command to the Ctrl/⌘+K menu?** Push an entry in AppShell's `buildCommands()` (`{ group, label, icon, keywords, run }`); `run` may only use `window.LWT.*` or the centralized header/sticky-bar controls.
