@@ -187,6 +187,8 @@ Add new values as tokens (or reuse one) rather than hardcoding a color, radius, 
 
 `.tabbar` is a **segmented control** (recessed `--panel-2` track, active button raised on `--seg-active-bg` with `--shadow-sm`) reused as-is for both `#mainTabbar` and TaskModule's inner Posteingang/Woche/Backlog/Archiv tabs; `.view-toggle` (Liste/Woche) uses the same look. Active `.chips`/`.range-chips` buttons use the accent tone, not a solid fill.
 
+The **Aufgaben tab is deliberately denser** than the Zeit tab: the "Dense Aufgaben tab" block scopes tighter panel padding/gaps, smaller headings and group heads, and slimmer two-line `.task-card`s to `#task-viewRoot`, so the Zeit tab's forms keep their room. `.panel-slim` is a toolbar-like single-row panel used for the week navigation (`renderWeekView`, `.week-bar`) and the backlog filters (`renderBacklogView`).
+
 Inside a `.panel` the flex `gap` owns vertical rhythm, so `.panel > *` resets margins, and one rule just above the breakpoints (`.panel > :is(.toolbar, .range-chips, …)`) drops the outer margins of components that also appear outside panels.
 
 **Icons**: `.icon` (sized in `em`, `stroke: currentColor`) styles every `<svg>` from the sprite; filled shapes inside a `<symbol>` set `fill="currentColor"` themselves. Icons are decorative (`aria-hidden`) — icon-only buttons must carry an `aria-label`. Emoji are no longer used as UI icons; glyphs that are part of a label's text (`● Aktiv`, the `✓/✕/↗` archive markers, the `⠿` drag handle, menu checkmarks) are still plain text.

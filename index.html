@@ -993,6 +993,35 @@
     .pomodoro-done-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
     .pomodoro-done-actions button { width: auto; min-height: 42px; padding: 8px 20px; font-size: var(--fs-md); }
 
+    /* ── Dense Aufgaben tab ─────────────────────────────────────
+       Scoped to #task-viewRoot so the Zeit tab keeps its roomier forms:
+       tighter panels, headings, groups and two-line cards, so more tasks
+       fit on screen. .panel-slim = a toolbar-like single-row panel
+       (week navigation, backlog filters). */
+    #task-viewRoot { gap: 14px; }
+    #task-viewRoot > .panel { padding: 14px 16px; gap: 8px; border-radius: var(--radius-lg); }
+    #task-viewRoot > .panel.panel-slim { padding: 6px; }
+    #task-viewRoot .panel-head { margin-bottom: 0; }
+    #task-viewRoot .panel-head h2 { font-size: var(--fs-lg); }
+    #task-viewRoot .hint { margin: 0; }
+    #task-viewRoot .group { margin-top: 10px; }
+    #task-viewRoot .group:first-child, #task-viewRoot .panel-head + .group { margin-top: 2px; }
+    #task-viewRoot .group-head { font-size: var(--fs-2xs); margin-bottom: 5px; padding-bottom: 4px; }
+    #task-viewRoot .task-list { gap: 4px; }
+    #task-viewRoot .task-card { padding: 4px 8px 4px 6px; gap: 3px; }
+    #task-viewRoot .task-body { gap: 1px; }
+    #task-viewRoot .task-notes { line-height: 1.35; }
+    #task-viewRoot .empty.with-icon { padding: 18px 16px; }
+    /* Week navigation: one slim row — ‹ KW … › [Diese Woche]. */
+    .week-bar .week-nav { gap: 6px; }
+    .week-bar .week-nav button { min-height: 30px; height: 30px; padding: 0 10px; font-size: var(--fs-sm); }
+    .week-bar .week-nav button.icon-only, .week-bar .week-nav button:has(> .icon:only-child) { width: 30px; padding: 0; }
+    .week-bar .week-nav .week-label { font-size: var(--fs-base); font-weight: 600; }
+    /* Backlog filters: compact selects in the slim panel. */
+    .panel-slim .filter-row { gap: 8px; padding: 2px 4px 4px; }
+    .panel-slim .filter-row label { font-size: var(--fs-2xs); margin-bottom: 3px; }
+    .panel-slim .filter-row select, .panel-slim .filter-row button { min-height: 32px; padding: 4px 10px; font-size: var(--fs-sm); }
+
     /* Inside a .panel the flex gap owns the vertical rhythm, so these
        components' own outer margins (meant for use outside panels) are
        dropped when they are a panel's direct child. */
@@ -1033,6 +1062,9 @@
       .filter-row { grid-template-columns: 1fr; }
       .week-nav { grid-template-columns: auto minmax(0, 1fr) auto; }
       .week-nav .week-today { grid-column: 1 / -1; }
+      .week-bar .week-nav { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+      .week-bar .week-nav .week-today { grid-column: auto; }
+      .week-bar .week-nav .week-label { font-size: var(--fs-sm); }
       .chip-group { align-items: flex-start; flex-direction: column; gap: 4px; }
       .capture-row.with-ticket { grid-template-columns: minmax(0, 5.5rem) minmax(0, 1fr) auto auto; }
       .capture-row.with-ticket button:not(.icon-btn) { padding: 6px 10px; }
@@ -5659,7 +5691,7 @@
         const frag = document.createDocumentFragment();
         const isCurrent = ui.weekKey === currentWeekKey();
 
-        const navPanel = el('section', { className: 'panel' });
+        const navPanel = el('section', { className: 'panel panel-slim week-bar' });
         const nav = el('div', { className: 'week-nav' });
         nav.appendChild(button('', { icon: 'chevron-left', title: 'Vorherige Woche', attrs: { 'aria-label': 'Vorherige Woche' }, onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, -1); render(); } }));
         nav.appendChild(el('div', { className: 'week-label', text: formatWeekLabel(ui.weekKey) }));
@@ -5721,7 +5753,7 @@
         const frag = document.createDocumentFragment();
         const all = backlogTasks();
 
-        const filterPanel = el('section', { className: 'panel' });
+        const filterPanel = el('section', { className: 'panel panel-slim' });
         const filters = el('div', { className: 'filter-row' });
 
         const makeSelect = (labelText, value, options, onChange) => {
