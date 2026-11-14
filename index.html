@@ -566,6 +566,48 @@
       font-size: var(--fs-sm); line-height: 1.5;
     }
 
+    /* ── Compact sticky bar (AppShell applyStickyState) ──────────
+       Desktop only (>1050px, where the bar is sticky). Once the page is
+       scrolled past the header the bar collapses to one row: quick capture,
+       a running timer (status + Stop) and the Pomodoro countdown; notes and
+       the timer form are hidden. JS adds a margin-bottom equal to the height
+       it lost, so the document flow — and the scroll position — never jump.
+       #stickyExpandBtn (a handle under the bar) re-opens it. */
+    .sticky-expand {
+      display: none; position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%);
+      width: 44px; min-height: 0; height: 22px; padding: 0; z-index: 3;
+      align-items: center; justify-content: center;
+      border-radius: var(--radius-pill); border-color: var(--current-border);
+      background: var(--panel); color: var(--muted); box-shadow: var(--shadow-sm);
+    }
+    .sticky-expand:hover { color: var(--text); background: var(--panel); }
+    .sticky-expand:active { transform: translateX(-50%) translateY(1px); }
+    .sticky-bar.is-stuck .sticky-expand { display: inline-flex; }
+    .sticky-bar.is-compact { grid-template-columns: minmax(0, 1fr); }
+    .sticky-bar.is-compact .current-side-aside { display: none; }
+    .sticky-bar.is-compact .current-side-main { flex-direction: row; align-items: stretch; gap: 8px; }
+    .sticky-bar.is-compact .current { padding: 5px 8px; gap: 10px; }
+    .sticky-bar.is-compact #quickCapture { flex: 1 1 auto; }
+    .sticky-bar.is-compact #quickCapture input,
+    .sticky-bar.is-compact #quickCapture button { min-height: 32px; padding: 4px 10px; }
+    .sticky-bar.is-compact #currentTimer { flex: 0 1 auto; flex-direction: row; align-items: center; }
+    .sticky-bar.is-compact #currentTimer:not(:has(.live-duration)) { display: none; }
+    .sticky-bar.is-compact .current-ticket-row,
+    .sticky-bar.is-compact .current-controls > :not(.current-toolbar),
+    .sticky-bar.is-compact .current-toolbar > :not(#stopBtn) { display: none; }
+    .sticky-bar.is-compact #stopBtn { min-height: 30px; padding: 2px 12px; }
+    .sticky-bar.is-compact #currentTimerStatus { white-space: nowrap; min-width: 0; }
+    .sticky-bar.is-compact #currentTimerStatus .muted { display: none; }
+    .sticky-bar.is-compact #currentTimerStatus .pill { padding: 1px 8px; }
+    .sticky-bar.is-compact .live-duration { font-size: var(--fs-xl); }
+    .sticky-bar.is-compact #pomodoroBar { flex: 0 0 auto; flex-wrap: nowrap; }
+    .sticky-bar.is-compact .pomodoro-info { flex-direction: row; align-items: center; }
+    .sticky-bar.is-compact #pomodoroPill, .sticky-bar.is-compact #pomodoroDuration,
+    .sticky-bar.is-compact #pomodoroSubtitle { display: none; }
+    .sticky-bar.is-compact .pomodoro-buttons button { min-height: 30px; padding: 2px 12px; }
+    .sticky-bar.is-compact .pomodoro-buttons button:disabled { display: none; }
+    .sticky-bar.is-compact .pomodoro-count { min-width: 0; }
+
     /* ══════════════════════════════════════════════════════════
        Zeit tab (TimeModule)
        ══════════════════════════════════════════════════════════ */
@@ -1106,6 +1148,8 @@
     <symbol id="i-note" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
     <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
     <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
     <symbol id="i-skip" viewBox="0 0 24 24"><path d="M6 6l7 6-7 6z"/><path d="M17 6v12"/></symbol>
     <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></symbol>
     <symbol id="i-reopen" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></symbol>
@@ -1294,6 +1338,7 @@
           <textarea id="notesInput" class="notes-input" maxlength="20000" spellcheck="true" aria-label="Notizen (Markdown, wird nicht gerendert)" placeholder="Freie Notizen, z. B. in Markdown …"></textarea>
         </section>
       </div>
+      <button type="button" id="stickyExpandBtn" class="sticky-expand" aria-expanded="false" aria-label="Leiste ausklappen" title="Leiste ausklappen"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg></button>
     </div>
 
     <main id="mainViewRoot">
@@ -6455,6 +6500,81 @@
         });
       }
 
+      /* ── Compact sticky bar on scroll ────────────────────────── */
+      // Desktop only (the bar is position: static ≤1050px). Collapses the
+      // bar to one row once the page is scrolled past the header; the lost
+      // height is added back as margin-bottom so the flow (and the scroll
+      // position) stays identical and nothing jumps. #stickyExpandBtn opens
+      // it again until the user scrolls a bit further.
+      var stickyBar = document.querySelector('.current-row.sticky-bar');
+      var stickyExpandBtn = qs('stickyExpandBtn');
+      var appHead = document.querySelector('.app-head');
+      var stickyWideMq = window.matchMedia('(min-width: 1051px)');
+      var stickyManualOpen = false;
+      var stickyManualOpenY = 0;
+      var stickyFrame = 0;
+      function stickyFocusInHiddenPart() {
+        var active = document.activeElement;
+        if (!active || !stickyBar.contains(active)) return false;
+        return active.id !== 'quickCaptureInput' && active.id !== 'quickCaptureBtn' &&
+          active.id !== 'stopBtn' && active.id !== 'stickyExpandBtn' &&
+          active.id !== 'pomodoroStartBtn' && active.id !== 'pomodoroStopBtn';
+      }
+      function applyStickyState() {
+        stickyFrame = 0;
+        if (!stickyBar) return;
+        var threshold = appHead ? appHead.getBoundingClientRect().bottom + window.scrollY : 0;
+        var stuck = stickyWideMq.matches && window.scrollY > threshold;
+        if (!stuck) stickyManualOpen = false;
+        else if (stickyManualOpen && Math.abs(window.scrollY - stickyManualOpenY) > 160 && !stickyFocusInHiddenPart()) stickyManualOpen = false;
+        var wasCompact = stickyBar.classList.contains('is-compact');
+        // Never collapse away the field the user is typing in.
+        var compact = stuck && !stickyManualOpen && (wasCompact || !stickyFocusInHiddenPart());
+        stickyBar.classList.toggle('is-stuck', stuck);
+        if (compact !== wasCompact) {
+          if (compact) {
+            var fullHeight = stickyBar.offsetHeight;
+            stickyBar.classList.add('is-compact');
+            stickyBar.style.marginBottom = Math.max(0, fullHeight - stickyBar.offsetHeight) + 'px';
+          } else {
+            stickyBar.classList.remove('is-compact');
+            stickyBar.style.marginBottom = '';
+          }
+        }
+        if (stickyExpandBtn) {
+          var label = compact ? 'Leiste ausklappen' : 'Leiste einklappen';
+          window.LWT.ui.setIcon(stickyExpandBtn, compact ? 'chevron-down' : 'chevron-up');
+          stickyExpandBtn.setAttribute('aria-label', label);
+          stickyExpandBtn.title = label;
+          stickyExpandBtn.setAttribute('aria-expanded', compact ? 'false' : 'true');
+        }
+      }
+      function scheduleStickyState() {
+        if (!stickyFrame) stickyFrame = requestAnimationFrame(applyStickyState);
+      }
+      // Opens the full bar while scrolled (used by the handle and by
+      // command-menu entries that focus a field hidden in compact mode).
+      function openStickyBar() {
+        stickyManualOpen = true;
+        stickyManualOpenY = window.scrollY;
+        applyStickyState();
+      }
+      if (stickyBar) {
+        window.addEventListener('scroll', scheduleStickyState, { passive: true });
+        window.addEventListener('resize', scheduleStickyState);
+        if (stickyExpandBtn) {
+          stickyExpandBtn.addEventListener('click', function () {
+            if (stickyBar.classList.contains('is-compact')) {
+              openStickyBar();
+            } else {
+              stickyManualOpen = false;
+              applyStickyState();
+            }
+          });
+        }
+        applyStickyState();
+      }
+
       /* ── Command menu (Ctrl/⌘+K) ─────────────────────────────── */
       // Keyboard launcher over existing actions. Uses only the LWT.* surface
       // and the centralized sticky-bar/header controls — no module internals.
@@ -6484,7 +6604,7 @@
           if (active) {
             cmds.push({ group: 'Timer', label: 'Timer stoppen', icon: 'clock', keywords: 'stop beenden', run: function () { clickControl('stopBtn'); } });
           } else {
-            cmds.push({ group: 'Timer', label: 'Timer starten …', icon: 'play', keywords: 'start ticket', run: function () { focusLater('ticketNumber'); } });
+            cmds.push({ group: 'Timer', label: 'Timer starten …', icon: 'play', keywords: 'start ticket', run: function () { openStickyBar(); focusLater('ticketNumber'); } });
           }
           var focus = window.LWT.tasks ? window.LWT.tasks.focusTasks() : [];
           focus.forEach(function (task) {
@@ -6499,7 +6619,7 @@
           });
         }
         cmds.push({ group: 'Pomodoro', label: 'Pomodoro starten', icon: 'clock', keywords: 'fokus pause', run: function () { clickControl('pomodoroStartBtn'); } });
-        cmds.push({ group: 'Allgemein', label: 'Notizen öffnen', icon: 'note', keywords: 'notiz scratchpad', run: function () { focusLater('notesInput'); } });
+        cmds.push({ group: 'Allgemein', label: 'Notizen öffnen', icon: 'note', keywords: 'notiz scratchpad', run: function () { openStickyBar(); focusLater('notesInput'); } });
         cmds.push({ group: 'Allgemein', label: 'Farbschema wechseln', icon: 'moon', keywords: 'theme hell dunkel dark light', run: function () { clickControl('themeToggleBtn'); } });
         if (window.LWT.tasks) cmds.push({ group: 'Allgemein', label: 'Backup jetzt herunterladen', icon: 'archive', keywords: 'sicherung export json', run: function () { window.LWT.tasks.runBackup(true); } });
         return cmds;

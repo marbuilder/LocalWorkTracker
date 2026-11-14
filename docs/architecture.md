@@ -50,6 +50,7 @@ Jump straight to a feature by grepping for its function names (`grep -n "functio
 | Notiz-Widget (Sticky-Bar, freies Markdown ohne Rendering) | `sanitizeNotes`, `loadNotes`/`saveNotes`, `scheduleNotesSave`/`flushNotesSave`, `setNotesStatus` | AppShell |
 | Legacy storage migration | `LEGACY_MAP` copy loop | Boot |
 | Icons (inline SVG sprite `#iconSprite`, `<symbol id="i-…">`) | `icon(name)`, `setIcon(node, name, text)` → `window.LWT.ui`; TaskModule's `button(label, { icon })`, `pill(text, className, iconName)`, `emptyState(text, iconName)` | Boot, consumed by all modules |
+| Compact sticky bar on scroll (`.is-stuck`/`.is-compact`, `#stickyExpandBtn`) | `applyStickyState`, `scheduleStickyState`, `openStickyBar`, `stickyFocusInHiddenPart` | AppShell |
 | Command menu (Ctrl/⌘+K, `#commandDialog`) — keyboard launcher over existing actions (tab switch, quick capture, task search, timer start/stop, start a timer on a "Heute im Fokus" task, Pomodoro, notes, theme, backup) | `buildCommands`, `filterCommands`, `renderCommands`, `runCommand`, `openCommandMenu` | AppShell |
 
 Spacing, radius, elevation, typography and colors are centralized in CSS custom properties (design tokens) defined once at the top of the stylesheet — see "CSS" below.
@@ -131,6 +132,7 @@ This is why there is only **one** daily-backup-due mechanism (`state.lastBackupD
         <div id="pomodoroBar">                 -- TimeModule-owned, unchanged markup/JS from LocalTimetracker; always visible regardless of the Zeittracking feature toggle
       <div class="current-side current-side-aside">  -- AppShell-owned wrapper, holds:
         <section id="notesWidget">              -- AppShell-owned; #notesTitle, #notesStatus (save-state indicator, aria-hidden), #notesInput — a plain `<textarea>`, no Markdown rendering, no edit/preview toggle; autosaves debounced via LWT.notes
+      <button id="stickyExpandBtn">            -- AppShell-owned handle under the bar (absolutely positioned, shown only while scrolled/stuck): collapses/expands the compact bar
     <main id="mainViewRoot">
       <section id="tabPanelTime">              -- everything from LocalTimetracker's <div class="grid"> (TimeModule-owned)
       <section id="tabPanelTasks" hidden>      -- .task-toolbar (#task-tabbar + static #taskSearch live-search input) + #task-viewRoot (TaskModule's own inner router)
@@ -196,6 +198,8 @@ Inside a `.panel` the flex `gap` owns vertical rhythm, so `.panel > *` resets ma
 `@media (prefers-reduced-motion: reduce)` turns transitions/animations off globally.
 
 Breakpoints: `1050px` (two-column grids collapse, incl. `.current-row`, for narrow viewports — the sticky bar also drops `position: sticky` here, since a fully stacked bar would otherwise eat too much of a narrow viewport), `700px` (mobile — makes tables card-like, and `.current-controls`'s flex-wrap breaks the timer's compact control row onto a second line). Light theme via `body[data-theme="light"]`, toggled by AppShell only — neither module has its own theme code anymore (see below).
+
+**Compact sticky bar on scroll (desktop, >1050px).** AppShell's `applyStickyState()` (scroll/resize, rAF-throttled) adds `.is-stuck` to `.current-row.sticky-bar` once `window.scrollY` passes the bottom of `.app-head`, and `.is-compact` unless the user re-opened it. Compact mode is pure CSS: one row with `#quickCapture`, a running timer's status + `#stopBtn` (`#currentTimer` is hidden entirely when no `.live-duration` is rendered, i.e. no active timer — and always when Zeittracking is off), and the Pomodoro countdown with its enabled button; `#notesWidget`, the timer form and the Pomodoro duration select are hidden. When collapsing, JS sets `margin-bottom` to the height the bar lost, so the document flow and scroll position stay identical (no jump, no flicker at the threshold). `#stickyExpandBtn` (AppShell-owned handle centred under the bar, visible only while `.is-stuck`) toggles it; `openStickyBar()` keeps it open until the user scrolls 160px further, and is also called by the command menu's "Notizen öffnen"/"Timer starten …" so they never focus a hidden field. The bar also never collapses while focus is inside a part compact mode would hide (`stickyFocusInHiddenPart`).
 
 **Stickiness lives on `.current-row`, not on the individual widgets.** Each of the four widgets used to carry `.sticky-bar` itself (`position: sticky` needs a containing block with real scrollable room to travel in); once they're nested inside the two `.current-side` column wrappers, a widget's containing block would become that wrapper instead of the page, and its travel range would shrink to almost nothing. Hoisting `.sticky-bar` (and its `position: sticky; top: 8px; z-index: 5`) to `.current-row` keeps one sticky unit whose containing block is still `.container`, so the whole bar travels exactly as before.
 
