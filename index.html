@@ -495,7 +495,11 @@
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 12px;
     }
-    .current-row.sticky-bar { position: sticky; top: 8px; z-index: 5; }
+    /* overflow-anchor: none keeps the browser from choosing a node inside
+       the sticky bar (which moves with the scroll) as its scroll anchor.
+       applyStickyState() additionally disables anchoring document-wide
+       while it collapses/expands the bar — see the comment there. */
+    .current-row.sticky-bar { position: sticky; top: 8px; z-index: 5; overflow-anchor: none; }
     .current-row.sticky-bar .current { box-shadow: var(--shadow-sticky); }
     .current .live-duration {
       font-size: var(--fs-3xl); font-weight: 700;
@@ -591,7 +595,7 @@
     .sticky-bar.is-compact #quickCapture input,
     .sticky-bar.is-compact #quickCapture button { min-height: 32px; padding: 4px 10px; }
     .sticky-bar.is-compact #currentTimer { flex: 0 1 auto; flex-direction: row; align-items: center; }
-    .sticky-bar.is-compact #currentTimer:not(:has(.live-duration)) { display: none; }
+    .sticky-bar.is-compact:not(.has-active-timer) #currentTimer { display: none; }
     .sticky-bar.is-compact .current-ticket-row,
     .sticky-bar.is-compact .current-controls > :not(.current-toolbar),
     .sticky-bar.is-compact .current-toolbar > :not(#stopBtn) { display: none; }
@@ -1057,7 +1061,9 @@
     /* Week navigation: one slim row — ‹ KW … › [Diese Woche]. */
     .week-bar .week-nav { gap: 6px; }
     .week-bar .week-nav button { min-height: 30px; height: 30px; padding: 0 10px; font-size: var(--fs-sm); }
-    .week-bar .week-nav button.icon-only, .week-bar .week-nav button:has(> .icon:only-child) { width: 30px; padding: 0; }
+    /* Class, not :has() — Firefox ESR 115 has no :has(), and inside a
+       selector list it would drop the whole rule. */
+    .week-bar .week-nav button.icon-only { width: 30px; padding: 0; }
     .week-bar .week-nav .week-label { font-size: var(--fs-base); font-weight: 600; }
     /* Backlog filters: compact selects in the slim panel. */
     .panel-slim .filter-row { gap: 8px; padding: 2px 4px 4px; }
@@ -4813,7 +4819,8 @@
       // opts.icon: sprite name (see #iconSprite) rendered before the label;
       // icon-only buttons pass label '' and must supply an aria-label.
       function button(label, opts = {}) {
-        const b = el('button', { text: opts.icon ? null : label, className: opts.className || '', type: 'button', title: opts.title });
+        const cls = (opts.className || '') + (opts.icon && !label ? (opts.className ? ' ' : '') + 'icon-only' : '');
+        const b = el('button', { text: opts.icon ? null : label, className: cls, type: 'button', title: opts.title });
         if (opts.icon) window.LWT.ui.setIcon(b, opts.icon, label);
         if (opts.onClick) b.addEventListener('click', opts.onClick);
         if (opts.attrs) Object.entries(opts.attrs).forEach(([k, v]) => b.setAttribute(k, v));
@@ -6520,28 +6527,72 @@
           active.id !== 'stopBtn' && active.id !== 'stickyExpandBtn' &&
           active.id !== 'pomodoroStartBtn' && active.id !== 'pomodoroStopBtn';
       }
-      function applyStickyState() {
+      // Compact only this far past the header, expand again only above the
+      // header: the gap (hysteresis) means a 1px scroll correction near the
+      // boundary can never flip the state back and forth.
+      var STICKY_COMPACT_OFFSET = 48;
+      var stickyFullHeight = 0;
+      var stickyToggling = false;
+      var stickyLastCompact = null;
+      function stickyHeight() { return stickyBar.getBoundingClientRect().height; }
+      function setStickyCompensation() {
+        // Fractional heights (not offsetHeight) so the flow stays identical
+        // to the sub-pixel — any leftover difference would shift content.
+        var lost = Math.max(0, stickyFullHeight - stickyHeight());
+        stickyBar.style.marginBottom = lost ? lost + 'px' : '';
+      }
+      function syncActiveTimerClass() {
+        var active = !!(window.LWT.time && isTimeTrackingEnabled() && window.LWT.time.getActiveTimer());
+        if (active === stickyBar.classList.contains('has-active-timer')) return;
+        stickyBar.classList.toggle('has-active-timer', active);
+        if (stickyBar.classList.contains('is-compact')) setStickyCompensation();
+      }
+      function applyStickyState(forceCompact) {
         stickyFrame = 0;
         if (!stickyBar) return;
-        var threshold = appHead ? appHead.getBoundingClientRect().bottom + window.scrollY : 0;
-        var stuck = stickyWideMq.matches && window.scrollY > threshold;
-        if (!stuck) stickyManualOpen = false;
-        else if (stickyManualOpen && Math.abs(window.scrollY - stickyManualOpenY) > 160 && !stickyFocusInHiddenPart()) stickyManualOpen = false;
+        syncActiveTimerClass();
+        var y = window.scrollY;
+        var threshold = appHead ? appHead.getBoundingClientRect().bottom + y : 0;
+        var wide = stickyWideMq.matches;
+        var stuck = wide && y > threshold;
         var wasCompact = stickyBar.classList.contains('is-compact');
-        // Never collapse away the field the user is typing in.
-        var compact = stuck && !stickyManualOpen && (wasCompact || !stickyFocusInHiddenPart());
+        if (!stuck) stickyManualOpen = false;
+        else if (stickyManualOpen && Math.abs(y - stickyManualOpenY) > 160 && !stickyFocusInHiddenPart()) stickyManualOpen = false;
+        var compact;
+        if (!wide || stickyManualOpen) compact = false;
+        else if (forceCompact === true) compact = stuck;
+        else if (wasCompact) compact = y >= threshold;              // stay compact until back above the header
+        else compact = y > threshold + STICKY_COMPACT_OFFSET && !stickyFocusInHiddenPart();
         stickyBar.classList.toggle('is-stuck', stuck);
         if (compact !== wasCompact) {
+          // Our own toggle may trigger a scroll event (e.g. a clamped
+          // scroll position); ignore it for one frame so it can't re-flip.
+          stickyToggling = true;
+          // Measuring the compact height forces a layout while the flow is
+          // still unbalanced (bar already short, margin not yet set). With
+          // scroll anchoring on, the browser "corrects" that by scrolling up
+          // by the lost height — back above the threshold, so the bar
+          // expands again and the page jumps up and down (seen in Firefox
+          // and Chromium with wheel scrolling). Anchoring is switched off
+          // document-wide for the duration of the toggle.
+          var root = document.documentElement;
+          root.style.overflowAnchor = 'none';
+          requestAnimationFrame(function () {
+            root.style.overflowAnchor = '';
+            stickyToggling = false;
+            scheduleStickyState();
+          });
           if (compact) {
-            var fullHeight = stickyBar.offsetHeight;
+            stickyFullHeight = stickyHeight();
             stickyBar.classList.add('is-compact');
-            stickyBar.style.marginBottom = Math.max(0, fullHeight - stickyBar.offsetHeight) + 'px';
+            setStickyCompensation();
           } else {
             stickyBar.classList.remove('is-compact');
             stickyBar.style.marginBottom = '';
           }
         }
-        if (stickyExpandBtn) {
+        if (stickyExpandBtn && compact !== stickyLastCompact) {
+          stickyLastCompact = compact;
           var label = compact ? 'Leiste ausklappen' : 'Leiste einklappen';
           window.LWT.ui.setIcon(stickyExpandBtn, compact ? 'chevron-down' : 'chevron-up');
           stickyExpandBtn.setAttribute('aria-label', label);
@@ -6550,7 +6601,8 @@
         }
       }
       function scheduleStickyState() {
-        if (!stickyFrame) stickyFrame = requestAnimationFrame(applyStickyState);
+        if (stickyToggling || stickyFrame) return;
+        stickyFrame = requestAnimationFrame(function () { applyStickyState(); });
       }
       // Opens the full bar while scrolled (used by the handle and by
       // command-menu entries that focus a field hidden in compact mode).
@@ -6568,10 +6620,13 @@
               openStickyBar();
             } else {
               stickyManualOpen = false;
-              applyStickyState();
+              applyStickyState(true);
             }
           });
         }
+        // The timer can start/stop while the bar is compact (▶ on a task
+        // card, Start/Stop, auto-stop) — keep .has-active-timer current.
+        setInterval(function () { if (stickyBar.classList.contains('is-stuck')) syncActiveTimerClass(); }, 1000);
         applyStickyState();
       }
 
