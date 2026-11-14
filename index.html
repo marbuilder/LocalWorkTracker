@@ -172,6 +172,19 @@
     p { color: var(--muted); }
     .muted { color: var(--muted); }
     .tnum { font-variant-numeric: tabular-nums; }
+    /* Inline SVG icons (sprite #iconSprite, helper LWT.ui.icon). Sized in em
+       so they follow the surrounding font size. */
+    .icon {
+      width: 1.15em; height: 1.15em; flex: 0 0 auto; vertical-align: -0.2em;
+      fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+    button > .icon:only-child { vertical-align: middle; }
+    .app-logo {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: var(--radius);
+      background: linear-gradient(135deg, var(--btn-primary-hover), var(--btn-primary-bg));
+      color: #fff; box-shadow: var(--shadow-sm); font-size: var(--fs-xl);
+    }
 
     /* ── Layout ────────────────────────────────────────────────── */
     .container { max-width: 1380px; margin: 0 auto; padding: 24px 20px 48px; display: flex; flex-direction: column; gap: var(--gap-outer); }
@@ -407,7 +420,8 @@
       position: relative;
     }
     .shortcut-help[hidden] { display: none; }
-    .shortcut-help summary { cursor: pointer; list-style: none; padding: 4px 8px; border-radius: var(--radius-md); }
+    .shortcut-help summary { cursor: pointer; list-style: none; padding: 6px 8px; border-radius: var(--radius-md); font-size: var(--fs-xl); line-height: 1; display: inline-flex; }
+    .shortcut-help summary:hover { color: var(--text); background: var(--btn-bg); }
     .shortcut-help summary::-webkit-details-marker { display: none; }
     .shortcut-help[open] summary { background: var(--btn-bg); }
     .shortcut-help kbd {
@@ -784,7 +798,8 @@
     button.copy-btn:hover { color: var(--text); border-color: var(--border); }
     button.small-btn { width: auto; min-height: 26px; height: 26px; padding: 0 10px; font-size: var(--fs-xs); }
     .star-btn { border-radius: var(--radius-pill); background: transparent; border-color: var(--border); color: var(--muted); }
-    .star-btn.on { color: var(--warn); border-color: var(--warn); }
+    .star-btn.on { color: var(--warn); border-color: var(--tone-warn-border); background: var(--tone-warn-bg); }
+    button.icon-btn > .icon { font-size: 14px; }
     /* Action symbols are always visible. Secondary helpers are revealed on
        hover/focus via visibility, so the layout doesn't jump. */
     .task-hover { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; margin-top: -2px; /* 26px buttons centred on the 22px title line */ }
@@ -890,6 +905,12 @@
       border: 1px dashed var(--border); border-radius: var(--radius-lg);
       font-size: var(--fs-base); line-height: 1.6;
     }
+    /* Empty state with icon (TaskModule emptyState()): icon above the text. */
+    .empty.with-icon { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 20px; }
+    .empty.with-icon > .icon {
+      width: 40px; height: 40px; padding: 9px; border-radius: var(--radius-pill);
+      background: var(--tone-accent-bg); color: var(--accent); stroke-width: 1.75;
+    }
     #toastRoot {
       position: fixed; right: 16px; bottom: 16px; z-index: 60;
       display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
@@ -933,7 +954,8 @@
     dialog.pomodoro-done { width: min(460px, 92vw); border: 2px solid var(--warn); box-shadow: var(--shadow-dialog); }
     dialog.pomodoro-done::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(2px); }
     .pomodoro-done-body { padding: 28px 24px 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
-    .pomodoro-done-icon { font-size: 56px; line-height: 1; }
+    .pomodoro-done-icon { font-size: 56px; line-height: 1; color: var(--warn); }
+    .pomodoro-done-icon .icon { stroke-width: 1.75; }
     .pomodoro-done-body h2 { margin: 8px 0 0; font-size: 26px; }
     .pomodoro-done-body p { margin: 0; font-size: var(--fs-lg); color: var(--muted); }
     .pomodoro-done-body .pomodoro-done-time { font-size: var(--fs-sm); }
@@ -1004,6 +1026,35 @@
   </style>
 </head>
 <body>
+  <!-- Icon sprite: hand-drawn 24×24 stroke icons, referenced via <use href="#i-…">
+       (static markup) or LWT.ui.icon(name) (JS). Stroke/fill come from .icon. -->
+  <svg id="iconSprite" xmlns="http://www.w3.org/2000/svg" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h11M19 18h1"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.85 6.75 19.6l1-5.8L3.5 9.7l5.9-.9z"/></symbol>
+    <symbol id="i-star-filled" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.85 6.75 19.6l1-5.8L3.5 9.7l5.9-.9z" fill="currentColor"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M6 6l7 6-7 6z"/><path d="M17 6v12"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></symbol>
+    <symbol id="i-reopen" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 2.5h5L16 13h5"/><path d="M5.5 5h13l2.5 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16"/><path d="M8 16v-5M12 16V8M16 16v-3"/></symbol>
+    <symbol id="i-logo" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M10 2.5h4"/></symbol>
+  </svg>
+
   <script>
     (function () {
       'use strict';
@@ -1047,21 +1098,50 @@
       if (theme === 'light') document.body.setAttribute('data-theme', 'light');
 
       window.LWT = window.LWT || {};
+
+      // Shared icon helper (all three modules use it). Builds
+      // <svg class="icon"><use href="#i-name"></svg> via DOM APIs only; the
+      // icon is decorative (aria-hidden) — callers keep their own
+      // title/aria-label as the accessible name.
+      var SVG_NS = 'http://www.w3.org/2000/svg';
+      function icon(name, className) {
+        var svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('class', 'icon' + (className ? ' ' + className : ''));
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('focusable', 'false');
+        var use = document.createElementNS(SVG_NS, 'use');
+        use.setAttribute('href', '#i-' + name);
+        svg.appendChild(use);
+        return svg;
+      }
+      // Replaces node's content with [icon][text]. text is set via
+      // textContent, never parsed as HTML.
+      function setIcon(node, name, text) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+        node.appendChild(icon(name));
+        if (text) {
+          var span = document.createElement('span');
+          span.textContent = String(text);
+          node.appendChild(span);
+        }
+        return node;
+      }
+      window.LWT.ui = { icon: icon, setIcon: setIcon };
     })();
   </script>
 
   <div class="container">
     <header class="app-head">
-      <h1>LocalWorkTracker</h1>
+      <h1><span class="app-logo" aria-hidden="true"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-logo"></use></svg></span>LocalWorkTracker</h1>
       <nav class="tabbar" id="mainTabbar" aria-label="Hauptbereiche">
-        <button type="button" data-main-tab="time">⏱ Zeit</button>
-        <button type="button" data-main-tab="tasks">✅ Aufgaben</button>
-        <button type="button" data-main-tab="daten">⚙️ Einstellungen</button>
+        <button type="button" data-main-tab="time"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Zeit</span></button>
+        <button type="button" data-main-tab="tasks"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-tasks"></use></svg><span>Aufgaben</span></button>
+        <button type="button" data-main-tab="daten"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-settings"></use></svg><span>Einstellungen</span></button>
       </nav>
       <div class="app-head-actions">
-        <button type="button" id="themeToggleBtn" class="ghost" title="Hell/Dunkel" aria-label="Farbschema wechseln">🌙</button>
+        <button type="button" id="themeToggleBtn" class="ghost" title="Hell/Dunkel" aria-label="Farbschema wechseln"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg></button>
         <details class="shortcut-help" id="shortcutHelp">
-          <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel">⌨️</summary>
+          <summary aria-label="Tastenkürzel anzeigen" title="Tastenkürzel"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-keyboard"></use></svg></summary>
           <div class="shortcut-list">
             <kbd>Ctrl/⌘ + Enter</kbd><span>Timer starten</span>
             <kbd>Esc</kbd><span>Timer stoppen (mit Rückfrage)</span>
@@ -1119,7 +1199,7 @@
         </div>
         <div id="pomodoroBar" class="current pomodoro-bar" aria-live="polite">
           <div class="pomodoro-info">
-            <div class="pill" id="pomodoroPill">⏱ Pomodoro bereit</div>
+            <div class="pill" id="pomodoroPill"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Pomodoro bereit</span></div>
             <div class="pomodoro-controls">
               <select id="pomodoroDuration" aria-label="Pomodoro-Dauer wählen">
                 <option value="5">5 Min.</option>
@@ -1394,7 +1474,7 @@
 
   <dialog id="pomodoroDoneDialog" class="pomodoro-done" aria-labelledby="pomodoroDoneTitle">
     <div class="pomodoro-done-body">
-      <div class="pomodoro-done-icon" aria-hidden="true">⏰</div>
+      <div class="pomodoro-done-icon" aria-hidden="true"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg></div>
       <h2 id="pomodoroDoneTitle">Pomodoro abgelaufen!</h2>
       <p>Zeit für eine Pause.</p>
       <p class="pomodoro-done-time" id="pomodoroDoneTime"></p>
@@ -1592,7 +1672,7 @@
         dom.pomodoroStartBtn.disabled = running;
         dom.pomodoroStopBtn.disabled = !running;
         if (!running) {
-          dom.pomodoroPill.textContent = '⏱ Pomodoro bereit';
+          window.LWT.ui.setIcon(dom.pomodoroPill, 'clock', 'Pomodoro bereit');
           dom.pomodoroPill.classList.remove('pending');
           dom.pomodoroDisplay.textContent = formatPomodoroClock(pomodoro.minutes * 60000);
           dom.pomodoroSubtitle.textContent = 'Bereit';
@@ -1929,7 +2009,7 @@
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'copy-btn';
-        btn.textContent = '⧉';
+        btn.appendChild(window.LWT.ui.icon('copy'));
         btn.title = 'Ticketnummer kopieren';
         btn.setAttribute('aria-label', `Ticketnummer ${ticket} kopieren`);
         btn.addEventListener('click', async () => {
@@ -3036,9 +3116,10 @@
         if (!ticketRows.length) {
           dom.summaryContainer.innerHTML = '';
           const empty = document.createElement('div');
-          empty.className = 'empty';
+          empty.className = 'empty with-icon';
+          empty.appendChild(window.LWT.ui.icon('chart'));
           const weekRange = `${range.from.toLocaleDateString('de-DE')} – ${range.to.toLocaleDateString('de-DE')}`;
-          empty.textContent = `Keine Daten für die Woche ${weekRange}.`;
+          empty.appendChild(document.createTextNode(`Keine Daten für die Woche ${weekRange}.`));
           wrap.appendChild(empty);
           dom.summaryContainer.appendChild(wrap);
           return;
@@ -4610,15 +4691,28 @@
         return node;
       }
 
+      // opts.icon: sprite name (see #iconSprite) rendered before the label;
+      // icon-only buttons pass label '' and must supply an aria-label.
       function button(label, opts = {}) {
-        const b = el('button', { text: label, className: opts.className || '', type: 'button', title: opts.title });
+        const b = el('button', { text: opts.icon ? null : label, className: opts.className || '', type: 'button', title: opts.title });
+        if (opts.icon) window.LWT.ui.setIcon(b, opts.icon, label);
         if (opts.onClick) b.addEventListener('click', opts.onClick);
         if (opts.attrs) Object.entries(opts.attrs).forEach(([k, v]) => b.setAttribute(k, v));
         return b;
       }
 
-      function pill(text, className) {
-        return el('span', { className: 'pill' + (className ? ' ' + className : ''), text });
+      function pill(text, className, iconName) {
+        const node = el('span', { className: 'pill' + (className ? ' ' + className : ''), text: iconName ? null : text });
+        if (iconName) window.LWT.ui.setIcon(node, iconName, text);
+        return node;
+      }
+
+      // Shared empty-state block: icon above a single line of text.
+      function emptyState(text, iconName) {
+        const node = el('div', { className: 'empty' + (iconName ? ' with-icon' : '') });
+        if (iconName) node.appendChild(window.LWT.ui.icon(iconName));
+        node.appendChild(el('div', { text }));
+        return node;
       }
 
       function clear(node) {
@@ -4794,7 +4888,7 @@
         if (task.carryCount > 0) meta.appendChild(pill(`${task.carryCount}× verschoben`));
         if (trackingEnabled()) {
           const tracked = window.LWT.time.getTrackedMinutesLabel(task.id);
-          if (tracked) meta.appendChild(pill('⏱ ' + tracked));
+          if (tracked) meta.appendChild(pill(tracked, '', 'clock'));
         }
         meta.appendChild(el('span', { text: 'erfasst ' + relativeDays(task.createdAt, now) }));
         if (addEffort) meta.appendChild(addEffort);
@@ -4826,7 +4920,8 @@
       }
 
       function copyButton(getText, what) {
-        return button('⧉', {
+        return button('', {
+          icon: 'copy',
           className: 'icon-btn copy-btn',
           title: what + ' kopieren',
           attrs: { 'aria-label': what + ' kopieren' },
@@ -4902,7 +4997,8 @@
         const list = items.filter(Boolean);
         if (!list.length) return null;
         const menu = el('details', { className: 'card-menu' });
-        const summary = el('summary', { text: '⋯', title: 'Weitere Aktionen', attrs: { 'aria-label': 'Weitere Aktionen' } });
+        const summary = el('summary', { title: 'Weitere Aktionen', attrs: { 'aria-label': 'Weitere Aktionen' } });
+        summary.appendChild(window.LWT.ui.icon('more'));
         menu.appendChild(summary);
         const box = el('div', { className: 'card-menu-list', attrs: { role: 'menu' } });
         list.forEach(item => {
@@ -5191,7 +5287,8 @@
       }
 
       function backlogIconButton(task) {
-        return button('↩\uFE0E', {
+        return button('', {
+          icon: 'undo',
           className: 'icon-btn',
           title: 'Ins Backlog',
           attrs: { 'aria-label': 'Ins Backlog' },
@@ -5212,15 +5309,18 @@
           check: { onClick: () => completeTask(task.id), title: 'Erledigt' }
         });
 
-        const star = button(task.todayFlag ? '★' : '☆', {
+        const starTitle = task.todayFlag ? 'Aus dem Heute-Fokus nehmen' : 'In den Heute-Fokus nehmen';
+        const star = button('', {
+          icon: task.todayFlag ? 'star-filled' : 'star',
           className: 'icon-btn star-btn' + (task.todayFlag ? ' on' : ''),
-          title: task.todayFlag ? 'Aus dem Heute-Fokus nehmen' : 'In den Heute-Fokus nehmen',
-          attrs: { 'aria-pressed': task.todayFlag ? 'true' : 'false' },
+          title: starTitle,
+          attrs: { 'aria-pressed': task.todayFlag ? 'true' : 'false', 'aria-label': starTitle },
           onClick: () => toggleToday(task.id)
         });
         hover.appendChild(star);
         if (trackingEnabled()) {
-          hover.appendChild(button('▶', {
+          hover.appendChild(button('', {
+            icon: 'play',
             className: 'icon-btn primary',
             title: 'Timer für diese Aufgabe starten',
             attrs: { 'aria-label': 'Timer für diese Aufgabe starten' },
@@ -5232,7 +5332,8 @@
         }
 
         const nextWeek = shortWeek(weekKeyOffset(task.plannedWeek, 1));
-        hover.appendChild(button('⏭\uFE0E', {
+        hover.appendChild(button('', {
+          icon: 'skip',
           className: 'icon-btn',
           title: `In ${nextWeek} verschieben`,
           attrs: { 'aria-label': `In ${nextWeek} verschieben` },
@@ -5314,13 +5415,15 @@
           const left = Math.ceil((task.doneAt + ARCHIVE_RETENTION_DAYS * DAY_MS - now) / DAY_MS);
           if (left <= 7) meta.appendChild(el('span', { className: 'purge-soon', text: left <= 1 ? 'wird morgen gelöscht' : `wird in ${left} Tagen gelöscht` }));
         }
-        hover.appendChild(button('↺', {
+        hover.appendChild(button('', {
+          icon: 'reopen',
           className: 'icon-btn',
           title: 'Wieder aufnehmen',
           attrs: { 'aria-label': 'Wieder aufnehmen' },
           onClick: () => reopenTask(task.id)
         }));
-        hover.appendChild(button('🗑', {
+        hover.appendChild(button('', {
+          icon: 'trash',
           className: 'icon-btn',
           title: 'Löschen',
           attrs: { 'aria-label': 'Löschen' },
@@ -5454,7 +5557,8 @@
           if (ev.key === 'Enter') { ev.preventDefault(); doCapture(); }
         }));
         submit.addEventListener('click', doCapture);
-        const notesToggle = button('📝', {
+        const notesToggle = button('', {
+          icon: 'note',
           className: 'icon-btn',
           title: ui.captureNotesOpen ? 'Notiz ausblenden' : 'Notiz hinzufügen',
           attrs: { 'aria-label': 'Notiz hinzufügen', 'aria-pressed': ui.captureNotesOpen ? 'true' : 'false' },
@@ -5498,7 +5602,7 @@
           ]));
         }
         if (!tasks.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Posteingang leer. Alles bewertet.' }));
+          panel.appendChild(emptyState('Posteingang leer. Alles bewertet.', 'inbox'));
         } else {
           const list = el('div', { className: 'task-list' });
           list.style.marginTop = '10px';
@@ -5515,9 +5619,9 @@
 
         const navPanel = el('section', { className: 'panel' });
         const nav = el('div', { className: 'week-nav' });
-        nav.appendChild(button('◀', { title: 'Vorherige Woche', onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, -1); render(); } }));
+        nav.appendChild(button('', { icon: 'chevron-left', title: 'Vorherige Woche', attrs: { 'aria-label': 'Vorherige Woche' }, onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, -1); render(); } }));
         nav.appendChild(el('div', { className: 'week-label', text: formatWeekLabel(ui.weekKey) }));
-        nav.appendChild(button('▶', { title: 'Nächste Woche', onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, 1); render(); } }));
+        nav.appendChild(button('', { icon: 'chevron-right', title: 'Nächste Woche', attrs: { 'aria-label': 'Nächste Woche' }, onClick: () => { ui.weekKey = weekKeyOffset(ui.weekKey, 1); render(); } }));
         const todayBtn = button('Diese Woche', {
           className: 'week-today' + (isCurrent ? '' : ' primary'),
           onClick: () => { ui.weekKey = currentWeekKey(); render(); }
@@ -5563,7 +5667,7 @@
         const heading = [el('h2', { text: `Geplant für ${shortWeek(ui.weekKey)} (${planned.length})` })];
         panel.appendChild(el('div', { className: 'panel-head' }, heading));
         if (!planned.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.' }));
+          panel.appendChild(emptyState('Für diese Woche ist nichts geplant. Zieh Aufgaben aus dem Posteingang oder dem Backlog herüber.', 'calendar'));
         } else {
           renderGroups(panel, planned, (t, n) => renderPlannedCard(t, n), now, { reorderable: true });
         }
@@ -5628,10 +5732,10 @@
         ]));
         panel.appendChild(el('p', { className: 'hint', text: `„→ ${shortWeek(ui.weekKey)}" plant in die Woche, die im Tab „Woche" gerade ausgewählt ist.` }));
         if (!tasks.length) {
-          panel.appendChild(el('div', {
-            className: 'empty',
-            text: all.length ? 'Keine Aufgabe passt zu den Filtern.' : 'Backlog leer. Bewertete Aufgaben ohne Wochenzuordnung landen hier.'
-          }));
+          panel.appendChild(emptyState(
+            all.length ? 'Keine Aufgabe passt zu den Filtern.' : 'Backlog leer. Bewertete Aufgaben ohne Wochenzuordnung landen hier.',
+            all.length ? 'search' : 'inbox'
+          ));
         } else {
           renderGroups(panel, tasks, renderBacklogCard, now);
         }
@@ -5648,7 +5752,7 @@
         ]));
         panel.appendChild(el('p', { className: 'hint', text: `Abgeschlossene Aufgaben werden ${ARCHIVE_RETENTION_DAYS} Tage nach Abschluss automatisch gelöscht. Backups behalten den älteren Stand.` }));
         if (!tasks.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Noch nichts abgeschlossen.' }));
+          panel.appendChild(emptyState('Noch nichts abgeschlossen.', 'archive'));
           frag.appendChild(panel);
           return frag;
         }
@@ -5710,7 +5814,7 @@
           el('h2', { text: `Suche: ${hits.length} Treffer` })
         ]));
         if (!hits.length) {
-          panel.appendChild(el('div', { className: 'empty', text: 'Keine Aufgabe gefunden.' }));
+          panel.appendChild(emptyState('Keine Aufgabe gefunden.', 'search'));
         }
         SEARCH_GROUPS.forEach(groupDef => {
           const tasks = hits.filter(groupDef.match).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -5971,7 +6075,7 @@
       function updateThemeButton() {
         var isLight = document.body.getAttribute('data-theme') === 'light';
         if (!themeToggleBtn) return;
-        themeToggleBtn.textContent = isLight ? '☀️' : '🌙';
+        window.LWT.ui.setIcon(themeToggleBtn, isLight ? 'sun' : 'moon');
         themeToggleBtn.setAttribute('aria-pressed', isLight ? 'true' : 'false');
       }
       updateThemeButton();
