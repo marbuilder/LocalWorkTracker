@@ -539,7 +539,8 @@
     .current-notes-tip textarea { min-height: 70px; }
     .current-toolbar { margin: 0; gap: 8px; }
     .current-toolbar button { width: auto; min-height: 36px; padding: 6px 16px; }
-    .quick-capture .capture-row { grid-template-columns: minmax(0, 1fr) minmax(0, 110px); width: 100%; }
+    .quick-capture .capture-row { grid-template-columns: minmax(0, 1fr) auto auto; width: 100%; }
+    .quick-capture .capture-row button { white-space: nowrap; }
     .pomodoro-bar { flex-wrap: wrap; }
     .pomodoro-count { min-width: 168px; text-align: right; }
     .pomodoro-info { display: flex; flex-direction: column; gap: 8px; }
@@ -1275,6 +1276,7 @@
           <div class="capture-row">
             <input id="quickCaptureInput" type="text" placeholder="Was ist dir aufgefallen?" autocomplete="off" maxlength="120">
             <button id="quickCaptureBtn" class="primary">Erfassen</button>
+            <button id="quickCapturePlanBtn" type="button" class="secondary" title="Direkt in die aktuelle Kalenderwoche einplanen (Umschalt+Enter)" aria-label="Direkt in die aktuelle Kalenderwoche einplanen">In diese KW</button>
           </div>
         </div>
         <div id="currentTimer" class="current current-compact" aria-live="polite">
@@ -4404,7 +4406,9 @@
          Actions
          ══════════════════════════════════════════════════════════ */
 
-      // extra: { ticket, notes } — both optional. Without an explicit ticket,
+      // extra: { ticket, notes, planCurrentWeek } — all optional. planCurrentWeek
+      // skips triage: the task lands planned in the current ISO week with the
+      // default priority 'eighty' (planned tasks require a priority). Without an explicit ticket,
       // an "ABC-123: Titel" prefix in the title is split off (splitTicketPrefix).
       function captureTask(title, extra = {}) {
         let ticket = sanitizeText(extra && extra.ticket, MAX_EXTERNAL_REF);
@@ -4416,16 +4420,17 @@
         }
         const clean = sanitizeText(rawTitle, MAX_TITLE);
         if (!clean) return null;
+        const planNow = !!(extra && extra.planCurrentWeek);
         const now = Date.now();
         const task = normalizeTask({
           id: cryptoRandomId(),
           title: clean,
           notes: sanitizeMultiline(extra && extra.notes, MAX_NOTES),
           context: '',
-          priority: null,
+          priority: planNow ? 'eighty' : null,
           effort: null,
-          status: 'inbox',
-          plannedWeek: null,
+          status: planNow ? 'planned' : 'inbox',
+          plannedWeek: planNow ? currentWeekKey() : null,
           todayFlag: false,
           carryCount: 0,
           externalRef: ticket,
@@ -6273,18 +6278,23 @@
       /* ── Global quick capture (sticky bar) ──────────────────── */
       var quickCaptureInput = qs('quickCaptureInput');
       var quickCaptureBtn = qs('quickCaptureBtn');
-      function doQuickCapture() {
+      var quickCapturePlanBtn = qs('quickCapturePlanBtn');
+      function doQuickCapture(planCurrentWeek) {
         if (!window.LWT.tasks || typeof window.LWT.tasks.captureTask !== 'function' || !quickCaptureInput) return;
-        var task = window.LWT.tasks.captureTask(quickCaptureInput.value);
+        var task = window.LWT.tasks.captureTask(quickCaptureInput.value, planCurrentWeek ? { planCurrentWeek: true } : undefined);
         if (!task) { quickCaptureInput.focus(); return; }
         quickCaptureInput.value = '';
-        showToast((task.externalRef ? task.externalRef + ': ' : '') + '„' + task.title + '“ erfasst.', { variant: 'good' });
+        var planned = task.status === 'planned';
+        var weekNo = planned ? String(task.plannedWeek).split('-W')[1] : '';
+        showToast((task.externalRef ? task.externalRef + ': ' : '') + '„' + task.title + '“ ' +
+          (planned ? 'in KW ' + Number(weekNo) + ' eingeplant.' : 'erfasst.'), { variant: 'good' });
         quickCaptureInput.focus();
       }
-      if (quickCaptureBtn) quickCaptureBtn.addEventListener('click', doQuickCapture);
+      if (quickCaptureBtn) quickCaptureBtn.addEventListener('click', function () { doQuickCapture(false); });
+      if (quickCapturePlanBtn) quickCapturePlanBtn.addEventListener('click', function () { doQuickCapture(true); });
       if (quickCaptureInput) {
         quickCaptureInput.addEventListener('keydown', function (ev) {
-          if (ev.key === 'Enter') { ev.preventDefault(); doQuickCapture(); }
+          if (ev.key === 'Enter') { ev.preventDefault(); doQuickCapture(ev.shiftKey); }
         });
       }
 
@@ -6523,7 +6533,7 @@
       function stickyFocusInHiddenPart() {
         var active = document.activeElement;
         if (!active || !stickyBar.contains(active)) return false;
-        return active.id !== 'quickCaptureInput' && active.id !== 'quickCaptureBtn' &&
+        return active.id !== 'quickCaptureInput' && active.id !== 'quickCaptureBtn' && active.id !== 'quickCapturePlanBtn' &&
           active.id !== 'stopBtn' && active.id !== 'stickyExpandBtn' &&
           active.id !== 'pomodoroStartBtn' && active.id !== 'pomodoroStopBtn';
       }
