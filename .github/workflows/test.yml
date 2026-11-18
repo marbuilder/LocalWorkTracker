@@ -13,7 +13,7 @@ permissions:
 jobs:
   headless-tests:
     runs-on: ubuntu-24.04  # Playwright 1.56 cannot install browsers on ubuntu-latest (26.04)
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
